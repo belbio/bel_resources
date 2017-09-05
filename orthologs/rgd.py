@@ -30,16 +30,16 @@ sys.path.append("..")
 import utils
 
 # Globals
-prefix = 'hgnc'
+prefix = 'rgd'
 namespace = utils.get_namespace(prefix)
 
 orthologs_fp = f'../data/orthologs/{prefix}.json.gz'
 tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
 dt = datetime.datetime.now().replace(microsecond=0).isoformat()
 
-server = 'ftp.ebi.ac.uk'
-remote_file = '/pub/databases/genenames/new/json/hgnc_complete_set.json'
-download_fp = '../downloads/hgnc_complete_set.json.gz'
+server = 'ftp.rgd.mcw.edu'
+remote_file = '/pub/data_release/RGD_ORTHOLOGS.txt'
+download_fp = '../downloads/rgd_RGD_ORTHOLOGS.txt.gz'
 
 orthologs = {
     "source": namespace['namespace'],
@@ -85,32 +85,8 @@ def build_json(force: bool = False):
             return False
 
     with gzip.open(download_fp, 'rt') as f:
-        data = json.load(f)
-
-    for doc in data['response']['docs']:
-
-        # Skip unused entries
-        if doc['status'] != 'Approved':
-            continue
-
-        subj_id = f"HGNC:{doc['symbol']}"
-        subj_tax_id = '9606'
-
-        for obj_id in doc.get('mgd_id', []):
-            orthologs['orthologies'].append(
-                {
-                    'subject': {'id': subj_id, 'tax_id': subj_tax_id},
-                    'object': {'id': obj_id, 'tax_id': '10090'},
-                }
-            )
-
-        for obj_id in doc.get('rgd_id', []):
-            orthologs['orthologies'].append(
-                {
-                    'subject': {'id': subj_id, 'tax_id': subj_tax_id},
-                    'object': {'id': obj_id, 'tax_id': '10116'},
-                }
-            )
+        for line in f:
+            pass  # TODO
 
     with gzip.open(orthologs_fp, 'wt') as f:
         json.dump(orthologs, f, indent=4)

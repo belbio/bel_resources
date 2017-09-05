@@ -7,12 +7,19 @@ Usage:  program.py <customer>
 """
 
 import ftplib
+import urllib.request
 import os
+import gzip
+import shutil
 import datetime
 import logging
-from typing import Tuple
+import yaml
+from typing import Tuple, Mapping, Any
 
-log = logging.getLogger('utils')
+log = logging.getLogger(__name__)
+
+# Globals
+namespaces_fn = '../namespaces.yaml'
 
 # from ftpsync.targets import FsTarget
 # from ftpsync.ftp_target import FtpTarget
@@ -27,6 +34,21 @@ log = logging.getLogger('utils')
 #     opts = {"force": False, "delete_unmatched": False, "verbose": 3, "dry_run": True}
 #     s = DownloadSynchronizer(local, remote, opts)
 #     s.run()
+
+
+def get_namespace(prefix: str) -> Mapping[str, Any]:
+    """Get namespace info
+
+    Args:
+        prefix (str): prefix or key of namespaces.yaml file
+
+    Returns:
+        Mapping[str, Any]: namespace information as dictionary
+    """
+    with open(namespaces_fn, 'r') as f:
+        namespaces = yaml.load(f)
+
+    return namespaces[prefix]
 
 
 def timestamp_to_date(ts: int) -> str:
@@ -55,24 +77,68 @@ def file_newer(check_file: str, base_file: str) -> bool:
     return cf_modtime_ts > bf_modtime_ts
 
 
-def get_ftp_file(server: str, rfile: str, lfile: str, force: bool = False) -> Tuple[bool, str]:
-    """Get FTP file only if newer than already downloaded file
+def get_web_file(url: str, lfile: str, days_old: int = 7, gzipflag: bool = False, force: bool = False) -> Tuple[bool, str]:
+    """ Get Web file only if
 
     Args:
-        server (str): ftp server name
-        rfile (str): remote file path
+        url (str): file url
         lfile (str): local file path
+        days_old (int): how many days old local file is before re-downloading
+        gzipflag (bool): gzip downloaded file, default False
         force (boolean): whether to force downloading file even if it's not newer than already downloaded file
 
     Returns:
         (boolean, str): tuple with success for get and a message with result information
     """
 
+    lmod_date = "19000101"
+    if os.path.exists(lfile) and not force:
+        modtime_ts = os.path.getmtime(lfile)
+        lmod_date = timestamp_to_date(modtime_ts)
+
+        check_date = (datetime.datetime.now() - datetime.timedelta(days=days_old)).strftime("%Y%m%d")
+
+        if lmod_date > check_date:
+            log.warning("Local source file is less than a week old - won't retrieve (can't get actual remote file mod date)")
+            return (False, "Local file is less than a week old - won't retrieve (can't get actual remote file mod date)")
+
+    # Download the file from `url` and save it locally under `file_name`:
+    if gzipflag:
+        with urllib.request.urlopen(url) as response, gzip.open(lfile, 'wb') as out_file:
+            shutil.copyfileobj(response, out_file)
+            return True, response
+
+    else:
+        with urllib.request.urlopen(url) as response, open(lfile, 'wb') as out_file:
+            shutil.copyfileobj(response, out_file)
+            return True, response
+
+    return False, 'Could not download file'
+
+
+def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzipflag: bool = False, force: bool = False) -> Tuple[bool, str]:
+    """Get FTP file only if newer than already downloaded file
+
+    Args:
+        server (str): ftp server name
+        rfile (str): remote file path
+        lfile (str): local file path
+        days_old (int): how many days old local file is before re-downloading - only used if can't determine remote file mod date
+        gzipflag (bool): gzip downloaded file, default False
+        force (bool): whether to force downloading file even if it's not newer than already downloaded file
+
+    Returns:
+        (boolean, str): tuple with success for get and a message with result information
+    """
+
     path = os.path.dirname(rfile)
+
     filename = os.path.basename(rfile)
 
-    modtime_ts = os.path.getmtime(lfile)
-    lmod_date = timestamp_to_date(modtime_ts)
+    lmod_date = "19000101"
+    if os.path.exists(lfile):
+        modtime_ts = os.path.getmtime(lfile)
+        lmod_date = timestamp_to_date(modtime_ts)
 
     ftp = ftplib.FTP(host=server)
     ftp.login()
@@ -98,19 +164,30 @@ def get_ftp_file(server: str, rfile: str, lfile: str, force: bool = False) -> Tu
     except Exception as e:
         log.warning(f'Cannot get dirinfo - no support for MLSD cmd - Error {e}')
         # log.error(f'Cannot get directory information on file modification date {e_resp}')
-        one_week_ago = (datetime.datetime.now() - datetime.timedelta(days=7)).strftime("%Y%m%d")
+        check_date = (datetime.datetime.now() - datetime.timedelta(days=days_old)).strftime("%Y%m%d")
 
-        if lmod_date > one_week_ago:
-            return (True, "Local file is less than a week old - can't get remote file mod date")
+        if lmod_date > check_date:
+            log.warning("Local source file is less than a week old - won't retrieve (can't get actual remote file mod date)")
+            return (True, "Local file is less than a week old - won't retrieve (can't get actual remote file mod date)")
 
-    with open(lfile, mode='wb') as f:
-        try:
-            ftp.retrbinary(f'RETR {filename}', f.write)
-            ftp.quit()
-            return (True, f'Downloaded {filename}')
-        except Exception as e:
-            ftp.quit()
-            return(False, f'Error downloading file: {e}')
+    if gzipflag:
+        with gzip.open(lfile, mode='wb') as f:
+            try:
+                ftp.retrbinary(f'RETR {filename}', f.write)
+                ftp.quit()
+                return (True, f'Downloaded {filename}')
+            except Exception as e:
+                ftp.quit()
+                return(False, f'Error downloading file: {e}')
+    else:
+        with open(lfile, mode='wb') as f:
+            try:
+                ftp.retrbinary(f'RETR {filename}', f.write)
+                ftp.quit()
+                return (True, f'Downloaded {filename}')
+            except Exception as e:
+                ftp.quit()
+                return(False, f'Error downloading file: {e}')
 
 
 def main():

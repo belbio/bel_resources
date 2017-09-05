@@ -1,0 +1,65 @@
+# Official list of Namespace prefixes and source information
+---
+hgnc:
+  namespace: HGNC
+  src_url: http://www.genenames.org
+  template_url: http://www.genenames.org/cgi-bin/gene_symbol_report?hgnc_id=<src_id>
+  example_url: http://www.genenames.org/cgi-bin/gene_symbol_report?hgnc_id=5
+  description: Human Gene Nomenclature Committee
+
+mgi:
+  namespace: MGI
+  src_url: http://www.informatics.jax.org/
+  template_url: http://www.informatics.jax.org/marker/<src_id>
+  example_url: http://www.informatics.jax.org/marker/MGI:2152878
+  description: Mouse Genome Informatics
+
+rgd:
+  namespace: RGD
+  src_url: http://rgd.mcw.edu/
+  template_url: http://rgd.mcw.edu/rgdweb/report/gene/main.html?id=<src_id>
+  example_url: http://rgd.mcw.edu/rgdweb/report/gene/main.html?id=2081
+  description: Rat Genome Database
+
+eg:
+  namespace: EG
+  src_url: https://www.ncbi.nlm.nih.gov/gene
+  template_url: https://www.ncbi.nlm.nih.gov/gene/<src_id>
+  description: https://www.ncbi.nlm.nih.gov/gene/1
+
+up:
+  namespace: UP
+  src_url: http://www.uniprot.org/uniprot
+  template_url: http://www.uniprot.org/uniprot/<src_id>
+  description: UniprotKB
+
+chembl:
+  namespace: CHEMBL
+  src_url: https://www.ebi.ac.uk/chembl/
+  template_url: https://www.ebi.ac.uk/chembl/compound/inspect/CHEMBL<src_id>
+  description: Chemistry EMBL database
+
+chebi:
+  namespace: CHEBI
+  src_url:
+  template_url:
+  description:
+
+pubchem:
+  namespace: PUBCHEM
+  src_url: https://pubchem.ncbi.nlm.nih.gov/compound
+  template_url: https://pubchem.ncbi.nlm.nih.gov/compound/<src_id>
+  description: NCBI PubChem
+go:
+  namespace: GO
+  src_url:
+  template_url:
+  description: Gene Ontology
+
+affy:
+  namespace: AFFY
+  src_url:
+  template_url:
+  description: Affymetrix
+
+

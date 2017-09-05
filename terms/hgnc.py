@@ -7,40 +7,51 @@ Usage:  hgnc.py
 """
 
 import sys
-import tarfile
 import os
 import tempfile
 import json
+import yaml
 import datetime
 import copy
 import gzip
-from typing import Mapping, List, Any
 import logging
+import logging.config
 
+module_fn = os.path.basename(__file__)
+module_fn = module_fn.replace('.py', '')
+
+# Setup logging
+logging_conf_fn = '../logging-conf.yaml'
+with open(logging_conf_fn, mode='r') as f:
+    logging.config.dictConfig(yaml.load(f))
+log = logging.getLogger(f'{module_fn}-terms')
+
+# Import local util module
 sys.path.append("..")
 import utils
 
-ch = logging.StreamHandler()
-formatter = logging.Formatter('%(asctime)s %(levelname)8s %(name)s | %(message)s')
-ch.setFormatter(formatter)
-
-log = logging.getLogger('hgnc-terms')
-log.addHandler(ch)
-log.setLevel(logging.ERROR)  # This toggles all the logging in your app
-
 # Globals
-hgnc_json = '../data/terms/hgnc.json.gz'
+prefix = 'hgnc'
+namespace = utils.get_namespace(prefix)
+
+description = "Human Gene Nomenclature Committee namespace"
+src_url = "http://www.genenames.org"
+url_template = "http://www.genenames.org/cgi-bin/gene_symbol_report?hgnc_id=<src_id>"
+terms_fp = '../data/terms/hgnc.json.gz'
 tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
-hgnc_orig = '../downloads/hgnc_complete_set.json'
 dt = datetime.datetime.now().replace(microsecond=0).isoformat()
 
+server = 'ftp.ebi.ac.uk'
+remote_file = '/pub/databases/genenames/new/json/hgnc_complete_set.json'
+download_fp = '../downloads/hgnc_complete_set.json.gz'
+
 terminology = {
-    "name": "HGNC",
-    "namespace": "HGNC",
-    "description": "Human Gene Nomenclature Committee namespace",
+    "name": namespace['namespace'],
+    "namespace": namespace['namespace'],
+    "description": namespace['description'],
     "version": dt,
-    "src_url": "http://www.genenames.org",
-    "url_template": "http://www.genenames.org/cgi-bin/gene_symbol_report?hgnc_id=<ID>",
+    "src_url": namespace['src_url'],
+    "url_template": namespace['template_url'],
     "terms": [],
 }
 
@@ -53,13 +64,8 @@ def update_data_files() -> bool:
     Returns:
         bool: files updated = True, False if not
     """
-    # Update data file
 
-    server = 'ftp.ebi.ac.uk'
-    remote_file = '/pub/databases/genenames/new/json/hgnc_complete_set.json'
-    # filename = os.path.basename(rfile)
-
-    result = utils.get_ftp_file(server, remote_file, hgnc_orig)
+    result = utils.get_ftp_file(server, remote_file, download_fp, gzipflag=True)
 
     changed = False
     if 'Downloaded' in result[1]:
@@ -69,7 +75,7 @@ def update_data_files() -> bool:
 
 
 def build_json(force: bool = False):
-    """Build HGNC namespace json load file
+    """Build term json load file
 
     Args:
         force (bool): build json result regardless of file mod dates
@@ -80,68 +86,102 @@ def build_json(force: bool = False):
 
     # Don't rebuild file if it's newer than downloaded source file
     if not force:
-        if utils.file_newer(hgnc_json, hgnc_orig):
+        if utils.file_newer(terms_fp, download_fp):
+            log.warning('Will not rebuild data file as it is newer than downloaded source file')
             return False
 
-    with open(hgnc_orig, 'r') as f:
-        hgnc_data = json.load(f)
+    # Map gene_types to BEL entity types
+    bel_entity_type_map = {
+        'gene with protein product': ['Gene', 'RNA', 'Protein'],
+        'RNA, cluster': ['Gene', 'RNA'],
+        'RNA, long non-coding': ['Gene', 'RNA'],
+        'RNA, micro': ['Gene', 'RNA', 'Micro_RNA'],
+        'RNA, ribosomal': ['Gene', 'RNA'],
+        'RNA, small cytoplasmic': ['Gene', 'RNA'],
+        'RNA, small misc': ['Gene', 'RNA'],
+        'RNA, small nuclear': ['Gene', 'RNA'],
+        'RNA, small nucleolar': ['Gene', 'RNA'],
+        'RNA, transfer': ['Gene', 'RNA'],
+        'phenotype only': ['Gene'],
+        'RNA, pseudogene': ['Gene', 'RNA'],
+        'T-cell receptor pseudogene': ['Gene', 'RNA'],
+        'T cell receptor pseudogene': ['Gene', 'RNA'],
+        'immunoglobulin pseudogene': ['Gene', 'RNA'],
+        'pseudogene': ['Gene', 'RNA'],
+        'T-cell receptor gene': ['Gene', 'RNA', 'Protein'],
+        'complex locus constituent': ['Gene', 'RNA', 'Protein'],
+        'endogenous retrovirus': ['Gene'],
+        'fragile site': ['Gene'],
+        'immunoglobulin gene': ['Gene', 'RNA', 'Protein'],
+        'protocadherin': ['Gene', 'RNA', 'Protein'],
+        'readthrough': ['Gene', 'RNA'],
+        'region': ['Gene'],
+        'transposable element': ['Gene'],
+        'unknown': ['Gene', 'RNA', 'Protein'],
+        'virus integration site': ['Gene'],
+        'RNA, micro': ['Gene', 'RNA', 'Micro_RNA'],
+        'RNA, misc': ['Gene', 'RNA'],
+        'RNA, Y': ['Gene', 'RNA'],
+        'RNA, vault': ['Gene', 'RNA'],
 
-    for doc in hgnc_data['response']['docs']:
+    }
+
+    with gzip.open(download_fp, 'rt') as f:
+        orig_data = json.load(f)
+
+    for doc in orig_data['response']['docs']:
 
         # Skip unused entries
         if doc['status'] != 'Approved':
             continue
 
+        hgnc_id = doc['hgnc_id'].replace('HGNC:', '')
         term = {
-            'entity_types': [], 'xref_ids': [], 'alias_ids': [], 'synonyms': [],
-            'children': [], 'obsolete_ids': [],
+            'species': 9606,
+            'src_id': hgnc_id,
+            'id': doc['symbol'],
+            'alt_ids': [hgnc_id],
+            'label': doc['symbol'],
+            'name': doc['name'],
+            'description': '',
+            'entity_types': [],
+            'equivalences': [],
+            'synonyms': [],
+            'children': [],
+            'obsolete_ids': [],
         }
 
-        term['species'] = 'TAXID:9606:human'
-        term['id'] = doc['symbol']
-        term['label'] = doc['symbol']
-        term['src_id'] = doc['hgnc_id']
-        term['name'] = doc['name']
-        term['description'] = ''
-
+        # Synonyms
         term['synonyms'].extend(doc.get('synonyms', []))
         term['synonyms'].extend(doc.get('alias_symbol', []))
-        term['alias_ids'] = [doc['hgnc_id']]
 
+        # Equivalences
         for _id in doc.get('uniprot_ids', []):
-            term['xref_ids'].append({'id': _id, 'source': 'Uniprot'})
-
-        for _id in doc.get('mgd_id', []):
-            term['xref_ids'].append({'id': _id, 'source': 'MGD'})
-
-        for _id in doc.get('rgd_id', []):
-            term['xref_ids'].append({'id': _id, 'source': 'RGD'})
+            term['equivalences'].append(f"UP:{_id}")
 
         if 'entrez_id' in doc:
-            term['xref_ids'].append({'id': doc['entrez_id'], 'source': 'EntrezGene'})
+            term['equivalences'].append(f"EG:{doc['entrez_id']}")
 
-        doc['entity_types'] = ['Gene']
+        # Entity types
+        if doc['locus_type'] in bel_entity_type_map:
+            term['entity_types'] = bel_entity_type_map[doc['locus_type']]
+        else:
+            log.error(f'New HGNC locus_type not found in bel_entity_type_map {doc["locus_type"]}')
 
-        if 'RNA, long non-coding' in doc['locus_type']:
-            doc['entity_types'].extend(['RNA'])
+        # Obsolete Namespace IDs
+        if 'prev_symbol' in doc:
+            for prev_id in doc['prev_symbol']:
+                term['obsolete_ids'].append(prev_id)
 
-        if 'protein product' in doc['locus_type']:
-            doc['entity_types'].extend(['RNA', 'Protein'])
+        # Add term to terms
+        terminology['terms'].append(copy.deepcopy(term))
 
-        if 'RNA, micro' in doc['locus_type']:
-            doc['entity_types'].extend(['Micro_RNA'])
-
-        for prev_id in doc.get('prev_symbol', []):
-            term['obsolete_ids'].extend(prev_id)
-
-        terminology['terms'].append(copy.deepcopy(doc))
-
-    with gzip.open(hgnc_json, 'wt') as f:
+    with gzip.open(terms_fp, 'wt') as f:
         json.dump(terminology, f, indent=4)
 
 
 def main():
-    # Cannot detect changes as ftp server doesn't support it
+    # Cannot detect changes as ftp server doesn't support MLSD cmd
     update_data_files()
     build_json()
 
