@@ -11,6 +11,13 @@ Run `./setup.sh`
 
 You will need to use `source .venv/bin/activate` to start the virtualenv
 
+*Using Docker for Mac - need to set Docker to use 4Gb of Memory in order to allow
+Elasticsearch to use 2Gb of Heap/Ram (see docker-compose.yml for elasticsearch Java options)*
+otherwise Elasticsearch will crash with a 137 error (which means out of memory).
+
+Have to use local directory storage on Mac for Docker for elasticsearch and arangodb
+due to 60Gb limitation on all Docker images/dockervolumes/etc.
+
 ## Using these tools
 
 *TODO* -- create a Makefile to run all of the update scripts - all update scripts
@@ -37,3 +44,32 @@ Script will process source data files and generate a standardized load file foll
 
 ### Step 4  *TODO*
 Upload the load files using the BELBio API with the upload
+
+## Notes
+
+### Elasticsearch term indexing stats
+
+Almost 18M terms in search index.  It takes 6.6Gb of diskspace.
+
+| Namespace  | Count      |
+| ---------- | ---------- |
+| EG | 15,428,000 |
+| TAX | 1,645,046 |
+| SP | 555,426 |
+| CHEBI | 115,240 |
+| MGI | 56,181 |
+| RGD | 44,973 |
+| HGNC | 41,231 |
+| MESH | 18,187 |
+| DO | 8,507 |
+
+
+### Orthology ArangoDB arangoimp load times
+
+In docker container on Mac Laptop - limited to 4 cpus and 4Gb RAM.  Example
+load command below:
+
+    time cat "" | arangoimp --server.database "bel" --file "ortholog_edges.jsonl" --type json --overwrite true --collection "ortholog_edges" --create-collection true --progress true
+
+* Loaded 3M orthology nodes in 90 seconds
+* Loaded 3M orthology edges in 45 seconds

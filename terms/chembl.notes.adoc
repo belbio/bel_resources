@@ -1,0 +1,268 @@
+# Resource Generator
+William Hayes <whayes@selventa.com>
+v1.0, 2015-08-25
+:toc:
+:source-highlighter: pygments
+
+== Using Jena
+
+----
+# Load Turtle files
+nohup ~/jena/apache-jena-3.0.1-SNAPSHOT/bin/tdbloader2 --loc ~/jena/data/chembl ~/jena/chembl-rdf/* &
+
+# Start Jena Fuseki SPARQL server
+./fuseki-server --loc=/home/resgen/jena/data /chembl
+----
+
+ssh config entry for thor:~resgen making fuseki default web app
+available locally (e.g. port 3030)
+----
+Host resgen
+  Hostname            192.168.100.95
+  LocalForward 3030 127.0.0.1:3030
+  Port                1662
+  User                resgen
+  ServerAliveInterval 30
+  IdentityFile        ~/.ssh/selventa_development4.pem
+
+----
+
+
+== Export synonyms from BEL Resources RDF
+----
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX belv: <http://www.openbel.org/vocabulary/>
+
+SELECT ?s ?o ?type ?id ?label ?scheme
+WHERE {
+    ?s skos:altLabel ?o;
+    a ?type .
+    OPTIONAL {?s dcterms:identifier ?id .}
+    OPTIONAL {?s skos:prefLabel ?label .}
+  OPTIONAL {?s skos:inScheme ?scheme .}
+}
+----
+
+== ChEBI namespace value example
+
+----
+<http://www.openbel.org/bel/namespace/chebi/100> a belv:AbundanceConcept ;
+    dcterms:identifier "100"^^xsd:string ;
+    dcterms:title "(-)-medicarpin"^^xsd:string ;
+    skos:altLabel "(-)-Medicarpin"^^xsd:string,
+        "(-)-medicarpin"^^xsd:string,
+        "(6aR,11aR)-9-methoxy-6a,11a-dihydro-6H-[1]benzofuro[3,2-c]chromen-3-ol"^^xsd:string,
+        "3-Hydroxy-9-methoxypterocarpan"^^xsd:string,
+        "6H-Benzofuro(3,2-c)(1)benzopyran-3-ol, 6a,11a-dihydro-9-methoxy-, cis-"^^xsd:string,
+        "C16H14O4"^^xsd:string,
+        "Demethylhomopterocarpin"^^xsd:string,
+        "medicarpin"^^xsd:string ;
+    skos:inScheme <http://www.openbel.org/bel/namespace/chebi> ;
+    skos:prefLabel "(-)-medicarpin"^^xsd:string .
+----
+
+== Describe
+
+----
+DESCRIBE <http://www.openbel.org/bel/namespace/entrez-gene/2523>
+----
+
+----
+@prefix belv:  <http://www.openbel.org/vocabulary/> .
+@prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix dcterms: <http://purl.org/dc/terms/> .
+@prefix skos:  <http://www.w3.org/2004/02/skos/core#> .
+@prefix rdfs:  <http://www.w3.org/2000/01/rdf-schema#> .
+@prefix foaf:  <http://xmlns.com/foaf/0.1/> .
+@prefix dc:    <http://purl.org/dc/elements/1.1/> .
+
+<http://www.openbel.org/bel/namespace/entrez-gene/2523>
+        a                      belv:NamespaceConcept , belv:AbundanceConcept , skos:Concept , belv:GeneConcept , belv:ProteinConcept , belv:RNAConcept ;
+        dcterms:identifier     "2523" ;
+        dcterms:title          "fucosyltransferase 1 (galactoside 2-alpha-L-fucosyltransferase, H blood group)" ;
+        belv:fromSpecies       "9606" ;
+        belv:orthologousMatch  <http://www.openbel.org/bel/namespace/entrez-gene/81919> , <http://www.openbel.org/bel/namespace/swissprot/O09160> , <http://www.openbel.org/bel/namespace/affy-probeset/99381_at> , <http://www.openbel.org/bel/namespace/affy-probeset/1368709_at> , <http://www.openbel.org/bel/namespace/rgd-rat-genes/2638> , <http://www.openbel.org/bel/namespace/mgi-mouse-genes/109375> , <http://www.openbel.org/bel/namespace/affy-probeset/1368709_PM_at> , <http://www.openbel.org/bel/namespace/affy-probeset/1450359_at> , <http://www.openbel.org/bel/namespace/entrez-gene/14343> , <http://www.openbel.org/bel/namespace/swissprot/Q10980> ;
+        skos:altLabel          "fucosyltransferase 1 (galactoside 2-alpha-L-fucosyltransferase, H blood group)" , "H" , "alpha(1,2) fucosyltransferase 1" , "GDP-L-fucose:beta-D-galactoside 2-alpha-L-fucosyltransferase 1" , "HH" , "alpha (1,2) fucosyltransferase" , "2-alpha-L-fucosyltransferase" , "galactoside 2-alpha-L-fucosyltransferase 1" , "blood group H alpha 2-fucosyltransferase" , "alpha(1,2)FT 1" , "FUT1" , "fucosyltransferase 1 (galactoside 2-alpha-L-fucosyltransferase)" , "HSC" ;
+        skos:exactMatch        <http://www.openbel.org/bel/namespace/affy-probeset/11725290_at> , <http://www.openbel.org/bel/namespace/affy-probeset/40337_at> , <http://www.openbel.org/bel/namespace/affy-probeset/206109_at> , <http://www.openbel.org/bel/namespace/hgnc-human-genes/4012> , <http://www.openbel.org/bel/namespace/affy-probeset/206109_PM_at> , <http://www.openbel.org/bel/namespace/entrez-gene/2523> , <http://www.openbel.org/bel/namespace/affy-probeset/11725291_at> ;
+        skos:inScheme          <http://www.openbel.org/bel/namespace/entrez-gene> ;
+        skos:prefLabel         "2523" .
+----
+
+== CHEMBL
+
+=== Substances to process
+# cco:Biological
+#   cco:Virus
+#   cco:Antibody
+#   cco:Vaccine
+#   cco:ProteinMolecule
+#   cco:Cell
+#   cco:Oligonucleotide
+#   cco:Oligosaccharide
+#   cco:Enzyme
+# cco:SmallMolecule
+# cco:UndefinedSubstance
+
+=== CONSTRUCT Query to create BEL ChEMBL RDF
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX dc: <http://purl.org/dc/elements/1.1/>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX cco: <http://rdf.ebi.ac.uk/terms/chembl#>
+PREFIX chembl.compound: <http://identifiers.org/chembl.compound/>
+PREFIX belv: <http://www.openbel.org/vocabulary/>
+
+CONSTRUCT {
+    ?chemblIdUri a belv:AbundanceConcept ;
+    skos:inScheme <http://www.openbel.org/bel/namespace/chembl/> ;
+    dcterms:identifier ?chemblId ;
+    dcterms:title ?prefLabel;
+    skos:prefLabel ?prefLabel ;
+    skos:altLabel ?altLabel ;
+    skos:exactMatch ?xref .
+
+}
+WHERE {
+  ?molecule a ?type .
+  ?type rdfs:subClassOf* cco:SmallMolecule .
+  ?molecule skos:prefLabel ?prefLabel .
+  ?molecule cco:chemblId ?chemblId .
+  BIND(IRI(CONCAT(:chembl.compound), ?chemblId) AS ?chemblIdUri)
+  OPTIONAL {
+    ?molecule skos:altLabel ?altLabel .
+    ?molecule skos:exactMatch ?xref .
+    BIND(IRI(CONCAT(STR('http://www.openbel.org/bel/namespace/chebi/'), )))
+  }
+}
+LIMIT 100
+
+== Build SmallMolecules
+
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX dc: <http://purl.org/dc/elements/1.1/>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX sio: <http://semanticscience.org/resource/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX cco: <http://rdf.ebi.ac.uk/terms/chembl#>
+PREFIX chembl.compound: <http://identifiers.org/chembl.compound/>
+PREFIX belv: <http://www.openbel.org/vocabulary/>
+
+CONSTRUCT {
+    ?chemblIdUri a belv:AbundanceConcept ;
+    skos:inScheme <http://www.openbel.org/bel/namespace/chembl/> ;
+    dcterms:identifier ?chemblId ;
+    dcterms:title ?prefLabel;
+    skos:prefLabel ?prefLabel ;
+    skos:altLabel ?altLabel ;
+    skos:exactMatch ?xref .
+
+}
+WHERE {
+  ?molecule a ?type .
+  ?type rdfs:subClassOf* (cco:SmallMolecule | cco:Oligonucleotide | cco:Oligosaccharide | cco:UndefinedSubstance) .
+  ?molecule skos:prefLabel ?prefLabel .
+  ?molecule cco:chemblId ?chemblId .
+  BIND(IRI(CONCAT(STR('http://www.openbel.org/bel/namespace/chembl/'), ?chemblId)) AS ?chemblIdUri)
+  OPTIONAL {
+    BIND(IRI(CONCAT(?molecule, STR('#standard_inchi_key'))) AS ?inchiKey)
+    ?inchiKey sio:SIO_000300 ?inchiKeyLabel .
+
+
+  }
+}
+LIMIT 100
+
+== Build Biologicals
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX dc: <http://purl.org/dc/elements/1.1/>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX sio: <http://semanticscience.org/resource/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX cco: <http://rdf.ebi.ac.uk/terms/chembl#>
+PREFIX chembl.compound: <http://identifiers.org/chembl.compound/>
+PREFIX belv: <http://www.openbel.org/vocabulary/>
+
+CONSTRUCT {
+    ?chemblIdUri a belv:ProteinConcept ;
+    skos:inScheme <http://www.openbel.org/bel/namespace/chembl/> ;
+    dcterms:identifier ?chemblId ;
+    dcterms:title ?prefLabel;
+    skos:prefLabel ?prefLabel ;
+    skos:altLabel ?altLabel ;
+    skos:exactMatch ?xref .
+}
+WHERE {
+  ?molecule a ?type .
+  ?type rdfs:subClassOf* (cco:Antibody | cco:ProteinMolecule | cco:Enzyme) .
+  ?molecule skos:prefLabel ?prefLabel .
+  ?molecule cco:chemblId ?chemblId .
+  BIND(IRI(CONCAT(STR('http://www.openbel.org/bel/namespace/chembl/'), ?chemblId)) AS ?chemblIdUri)
+  OPTIONAL {
+    ?molecule skos:exactMatch ?xref .
+    ?molecule skos:altLabel ?altLabel .
+  }
+}
+LIMIT 100
+
+=== Current being built version of CONSTRUCT query
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX dc: <http://purl.org/dc/elements/1.1/>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX sio: <http://semanticscience.org/resource/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX cco: <http://rdf.ebi.ac.uk/terms/chembl#>
+PREFIX chembl.compound: <http://identifiers.org/chembl.compound/>
+PREFIX belv: <http://www.openbel.org/vocabulary/>
+
+SELECT ?molecule ?chemblId ?prefLabel ?inchiKeyLabel ?chemblIdUri
+WHERE {
+  ?molecule a ?type .
+  ?type rdfs:subClassOf* cco:SmallMolecule .
+  ?molecule skos:prefLabel ?prefLabel .
+  ?molecule cco:chemblId ?chemblId .
+  BIND(IRI(CONCAT(STR('http://www.openbel.org/bel/namespace/chembl/'), ?chemblId)) AS ?chemblIdUri)
+  OPTIONAL {
+    BIND(IRI(CONCAT(?molecule, STR('#standard_inchi_key'))) AS ?inchiKey)
+    ?inchiKey sio:SIO_000300 ?inchiKeyLabel .
+  }
+}
+LIMIT 100
+
+=== Evaluate cco:Substance types
+
+PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+PREFIX dc: <http://purl.org/dc/elements/1.1/>
+PREFIX dcterms: <http://purl.org/dc/terms/>
+PREFIX foaf: <http://xmlns.com/foaf/0.1/>
+PREFIX skos: <http://www.w3.org/2004/02/skos/core#>
+PREFIX cco: <http://rdf.ebi.ac.uk/terms/chembl#>
+PREFIX chembl.compound: <http://identifiers.org/chembl.compound/>
+
+
+SELECT ?molecule ?p ?o
+WHERE {
+  ?molecule a ?type .
+  ?type rdfs:subClassOf* cco:Substance .
+  ?molecule ?p ?o .
+}
+LIMIT 50

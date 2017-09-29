@@ -1,0 +1,85 @@
+# docker-compose build && docker-compose up -d
+version: "3.2"
+
+volumes:
+  belres_kibana_data:
+    driver: local
+
+services:
+
+  # ArangoDB - document/graph store - core requirement
+  # http://localhost:8529
+  belres_arangodb:
+    container_name: belres_arangodb
+    image: arangodb:3.2.3
+    ports:
+      - "8529:8529"
+    volumes:
+      - ./data_arangodb:/var/lib/arangodb3
+    labels:
+      - traefik.enable=true
+      - traefik.backend=bel_arangodb
+      - traefik.frontend.rule=Host:arangodb.belapi.test
+      - traefik.port=8529
+    environment:
+      - ARANGO_NO_AUTH=1
+    restart: always
+
+  # Elasticsearch - terminology search - core requirement
+  # http://localhost:9200
+  belres_elasticsearch:
+    container_name: belres_elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:5.6.1
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    volumes:
+      - ./data_elasticsearch:/usr/share/elasticsearch/data
+      - ./elasticsearch.yml:/conf/elasticsearch.yml
+    # logging:
+    #   driver: none
+    environment:
+      - cluster.name=docker-cluster
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms2g -Xmx2g"
+      - xpack.security.enabled=false
+      - xpack.watcher.enabled=false
+      - xpack.monitoring.enabled=false
+      - xpack.ml.enabled=false
+      - xpack.graph.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    # deploy:
+    #   resources:
+    #     limits:
+    #       memory: 1g
+    restart: always
+
+
+  # Optional for viewing Elasticsearch terminology search service
+  # http://localhost:5601
+  belres_kibana:
+    container_name: belres_kibana
+    # image: kibana:5.1.2
+    image: docker.elastic.co/kibana/kibana:5.6.1
+    ports:
+      - 5601:5601
+    volumes:
+      - belres_kibana_data:/usr/share/kibana/data
+    labels:
+      - traefik.enable=true
+      - traefik.backend=kibana
+      - traefik.frontend.rule=Host:kibana.belapi.test
+      - traefik.port=5601
+    depends_on:
+      - belres_elasticsearch
+    environment:
+      - ELASTICSEARCH_URL=http://belres_elasticsearch:9200
+      - xpack.security.enabled=false
+    # logging:
+    #   driver: none
+    restart: always
+
+

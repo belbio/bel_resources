@@ -9,6 +9,7 @@ Usage:  program.py <customer>
 import ftplib
 import urllib.request
 import os
+import re
 import gzip
 import shutil
 import datetime
@@ -36,6 +37,22 @@ namespaces_fn = '../namespaces.yaml'
 #     s.run()
 
 
+def arango_id_to_key(_id):
+    """Remove illegal chars from potential arangodb _key (id)
+
+    Args:
+        _id (str): id to be used as arangodb _key
+
+    Returns:
+        (str): _key value with illegal chars removed
+    """
+
+    key = re.sub("[^a-zA-Z0-9\_\-\:\.\@\(\)\+\,\=\;\$\!\*\'\%]+", '_', _id)
+    if len(key) > 254:
+        log.error(f'Arango _key cannot be longer than 254 chars: Len={len(key)}  Key: {key}')
+    return key
+
+
 def get_namespace(prefix: str) -> Mapping[str, Any]:
     """Get namespace info
 
@@ -49,6 +66,15 @@ def get_namespace(prefix: str) -> Mapping[str, Any]:
         namespaces = yaml.load(f)
 
     return namespaces[prefix]
+
+
+def get_prefixed_id(ns_prefix, term_id):
+    """Prepend namespace prefix on id adding quotes if necessary"""
+
+    if ' ' in term_id:
+        return f'{ns_prefix}:"{term_id}"'
+    else:
+        return f'{ns_prefix}:{term_id}'
 
 
 def timestamp_to_date(ts: int) -> str:
@@ -109,9 +135,9 @@ def get_web_file(url: str, lfile: str, days_old: int = 7, gzipflag: bool = False
             return True, response
 
     else:
-        with urllib.request.urlopen(url) as response, open(lfile, 'wb') as out_file:
+        with urllib.request.urlopen(url).geturl() as response, open(lfile, 'wb') as out_file:
             shutil.copyfileobj(response, out_file)
-            return True, response
+            return True, response.status
 
     return False, 'Could not download file'
 

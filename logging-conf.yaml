@@ -1,4 +1,5 @@
 version: 1
+disable_existing_loggers: False
 formatters:
   simple:
     format: '%(name)s - %(levelname)s - %(asctime)s || %(message)s'
@@ -12,6 +13,9 @@ handlers:
     class: logging.FileHandler
     formatter: simple
     filename: '../processing.logs'
+loggers:
+  elasticsearch:
+    level: WARNING
 root:
-  level: WARNING
+  level: INFO
   handlers: [console, logfile]

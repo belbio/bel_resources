@@ -17,15 +17,6 @@ import gzip
 import logging
 import logging.config
 
-module_fn = os.path.basename(__file__)
-module_fn = module_fn.replace('.py', '')
-
-# Setup logging
-logging_conf_fn = '../logging-conf.yaml'
-with open(logging_conf_fn, mode='r') as f:
-    logging.config.dictConfig(yaml.load(f))
-log = logging.getLogger(f'{module_fn}-terms')
-
 # Import local util module
 sys.path.append("..")
 import utils
@@ -33,11 +24,12 @@ import utils
 # Globals
 prefix = 'hgnc'
 namespace = utils.get_namespace(prefix)
+ns_prefix = namespace['namespace']
 
 description = "Human Gene Nomenclature Committee namespace"
 src_url = "http://www.genenames.org"
 url_template = "http://www.genenames.org/cgi-bin/gene_symbol_report?hgnc_id=<src_id>"
-terms_fp = '../data/terms/hgnc.json.gz'
+terms_fp = '../data/terms/hgnc.jsonl.gz'
 tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
 dt = datetime.datetime.now().replace(microsecond=0).isoformat()
 
@@ -45,14 +37,13 @@ server = 'ftp.ebi.ac.uk'
 remote_file = '/pub/databases/genenames/new/json/hgnc_complete_set.json'
 download_fp = '../downloads/hgnc_complete_set.json.gz'
 
-terminology = {
+terminology_metadata = {
     "name": namespace['namespace'],
     "namespace": namespace['namespace'],
     "description": namespace['description'],
     "version": dt,
     "src_url": namespace['src_url'],
     "url_template": namespace['template_url'],
-    "terms": [],
 }
 
 
@@ -126,61 +117,73 @@ def build_json(force: bool = False):
 
     }
 
-    with gzip.open(download_fp, 'rt') as f:
-        orig_data = json.load(f)
+    with gzip.open(download_fp, 'rt') as fi, gzip.open(terms_fp, 'wt') as fo:
 
-    for doc in orig_data['response']['docs']:
+        # Header JSONL record for terminology
+        fo.write("{}\n".format(json.dumps({'metadata': terminology_metadata})))
 
-        # Skip unused entries
-        if doc['status'] != 'Approved':
-            continue
+        orig_data = json.load(fi)
 
-        hgnc_id = doc['hgnc_id'].replace('HGNC:', '')
-        term = {
-            'species': 9606,
-            'src_id': hgnc_id,
-            'id': doc['symbol'],
-            'alt_ids': [hgnc_id],
-            'label': doc['symbol'],
-            'name': doc['name'],
-            'description': '',
-            'entity_types': [],
-            'equivalences': [],
-            'synonyms': [],
-            'children': [],
-            'obsolete_ids': [],
-        }
+        for doc in orig_data['response']['docs']:
 
-        # Synonyms
-        term['synonyms'].extend(doc.get('synonyms', []))
-        term['synonyms'].extend(doc.get('alias_symbol', []))
+            # Skip unused entries
+            if doc['status'] != 'Approved':
+                continue
 
-        # Equivalences
-        for _id in doc.get('uniprot_ids', []):
-            term['equivalences'].append(f"UP:{_id}")
+            hgnc_id = doc['hgnc_id'].replace('HGNC:', '')
+            term = {
+                'namespace': ns_prefix,
+                'src_id': hgnc_id,
+                'id': utils.get_prefixed_id(ns_prefix, doc['symbol']),
+                'alt_ids': [utils.get_prefixed_id(ns_prefix, hgnc_id)],
+                'label': doc['symbol'],
+                'name': doc['name'],
+                'species': 'TAX:9606',
+                'description': '',
+                'entity_types': [],
+                'equivalences': [],
+                'synonyms': [],
+                'children': [],
+                'obsolete_ids': [],
+            }
 
-        if 'entrez_id' in doc:
-            term['equivalences'].append(f"EG:{doc['entrez_id']}")
+            # Synonyms
+            term['synonyms'].extend(doc.get('synonyms', []))
+            term['synonyms'].extend(doc.get('alias_symbol', []))
 
-        # Entity types
-        if doc['locus_type'] in bel_entity_type_map:
-            term['entity_types'] = bel_entity_type_map[doc['locus_type']]
-        else:
-            log.error(f'New HGNC locus_type not found in bel_entity_type_map {doc["locus_type"]}')
+            # Equivalences
+            for _id in doc.get('uniprot_ids', []):
+                term['equivalences'].append(f"SP:{_id}")
 
-        # Obsolete Namespace IDs
-        if 'prev_symbol' in doc:
-            for prev_id in doc['prev_symbol']:
-                term['obsolete_ids'].append(prev_id)
+            if 'entrez_id' in doc:
+                term['equivalences'].append(f"EG:{doc['entrez_id']}")
 
-        # Add term to terms
-        terminology['terms'].append(copy.deepcopy(term))
+            # Entity types
+            if doc['locus_type'] in bel_entity_type_map:
+                term['entity_types'] = bel_entity_type_map[doc['locus_type']]
+            else:
+                log.error(f'New HGNC locus_type not found in bel_entity_type_map {doc["locus_type"]}')
 
-    with gzip.open(terms_fp, 'wt') as f:
-        json.dump(terminology, f, indent=4)
+            # Obsolete Namespace IDs
+            if 'prev_symbol' in doc:
+                for prev_id in doc['prev_symbol']:
+                    term['obsolete_ids'].append(prev_id)
+
+            # Add term to JSONL
+            fo.write("{}\n".format(json.dumps({'term': term})))
 
 
 def main():
+    # Setup logging
+    global log
+    module_fn = os.path.basename(__file__)
+    module_fn = module_fn.replace('.py', '')
+
+    logging_conf_fn = '../logging-conf.yaml'
+    with open(logging_conf_fn, mode='r') as f:
+        logging.config.dictConfig(yaml.load(f))
+        log = logging.getLogger(f'{module_fn}-terms')
+
     # Cannot detect changes as ftp server doesn't support MLSD cmd
     update_data_files()
     build_json()

@@ -18,23 +18,15 @@ import gzip
 import logging
 import logging.config
 
-module_fn = os.path.basename(__file__)
-module_fn = module_fn.replace('.py', '')
-
-# Setup logging
-logging_conf_fn = '../logging-conf.yaml'
-with open(logging_conf_fn, mode='r') as f:
-    logging.config.dictConfig(yaml.load(f))
-log = logging.getLogger(f'{module_fn}-terms')
-
 # Import local util module
 sys.path.append("..")
 import utils
 # Globals
 prefix = 'rgd'
 namespace = utils.get_namespace(prefix)
+ns_prefix = namespace['namespace']
 
-terms_fp = f'../data/terms/{prefix}.json.gz'
+terms_fp = f'../data/terms/{prefix}.jsonl.gz'
 tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
 dt = datetime.datetime.now().replace(microsecond=0).isoformat()
 
@@ -43,14 +35,13 @@ remote_file = '/pub/data_release/GENES_RAT.txt'
 download_fp = f'../downloads/rgd_GENES_RAT.txt.gz'
 
 
-terminology = {
+terminology_metadata = {
     "name": namespace['namespace'],
     "namespace": namespace['namespace'],
     "description": namespace['description'],
     "version": dt,
     "src_url": namespace['src_url'],
     "url_template": namespace['template_url'],
-    "terms": [],
 }
 
 
@@ -99,21 +90,26 @@ def build_json(force: bool = False):
         "rrna": ['Gene', 'RNA'],
     }
 
-    with gzip.open(download_fp, 'rt') as f:
-        for line in f:
-            if re.match('#|GENE_RGD_ID', line, flags=0):
+    with gzip.open(download_fp, 'rt') as fi, gzip.open(terms_fp, 'wt') as fo:
+
+        # Header JSONL record for terminology
+        fo.write("{}\n".format(json.dumps({'metadata': terminology_metadata})))
+
+        for line in fi:
+            if re.match('#|GENE_RGD_ID', line, flags=0):  # many of the file header lines are comments
                 continue
+
             cols = line.split('\t')
             (rgd_id, symbol, name, desc, ncbi_gene_id, uniprot_id, old_symbols, old_names, gene_type) = (cols[0], cols[1], cols[2], cols[3], cols[20], cols[21], cols[29], cols[30], cols[36])
             # print(f'ID: {rgd_id}, S: {symbol}, N: {name}, D: {desc}, nbci_gene_id: {ncbi_gene_id}, up: {uniprot_id}, old_sym: {old_symbols}, old_names: {old_names}, gt: {gene_type}')
 
             synonyms = [val for val in old_symbols.split(';') + old_names.split(';') if val]
 
-            xref_ids = []
+            equivalences = []
             if ncbi_gene_id:
-                xref_ids.append(f'EG:{ncbi_gene_id}')
+                equivalences.append(f'EG:{ncbi_gene_id}')
             if uniprot_id:
-                xref_ids.append(f'UP:{uniprot_id}')
+                equivalences.append(f'UP:{uniprot_id}')
 
             entity_types = []
             if gene_type not in bel_entity_type_map:
@@ -122,25 +118,35 @@ def build_json(force: bool = False):
                 entity_types = bel_entity_type_map[gene_type]
 
             term = {
+                'namespace': ns_prefix,
                 'src_id': rgd_id,
-                'id': symbol,
-                'alt_ids': [rgd_id],
+                'id': utils.get_prefixed_id(ns_prefix, symbol),
+                'alt_ids': [utils.get_prefixed_id(ns_prefix, rgd_id)],
                 'label': symbol,
                 'name': name,
                 'description': desc,
-                'species': 10116,
-                'entity_types': entity_types,
-                'synonyms': synonyms,
+                'species': 'TAX:10116',
+                'entity_types': copy.copy(entity_types),
+                'equivalences': copy.copy(equivalences),
+                'synonyms': copy.copy(synonyms),
 
             }
-            # Add term to terms
-            terminology['terms'].append(copy.deepcopy(term, memo=None, _nil=[]))
 
-    with gzip.open(terms_fp, 'wt') as f:
-        json.dump(terminology, f, indent=4)
+            # Add term to JSONL
+            fo.write("{}\n".format(json.dumps({'term': term})))
 
 
 def main():
+
+    # Setup logging
+    global log
+    module_fn = os.path.basename(__file__)
+    module_fn = module_fn.replace('.py', '')
+
+    logging_conf_fn = '../logging-conf.yaml'
+    with open(logging_conf_fn, mode='r') as f:
+        logging.config.dictConfig(yaml.load(f))
+        log = logging.getLogger(f'{module_fn}-terms')
 
     # Cannot detect changes as ftp server doesn't support MLSD cmd
     update_data_files()

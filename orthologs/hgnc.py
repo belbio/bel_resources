@@ -31,9 +31,10 @@ import utils
 
 # Globals
 prefix = 'hgnc'
+ns_prefix = prefix.upper()
 namespace = utils.get_namespace(prefix)
 
-orthologs_fp = f'../data/orthologs/{prefix}.json.gz'
+orthologs_fp = f'../data/orthologs/{prefix}.jsonl.gz'
 tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
 dt = datetime.datetime.now().replace(microsecond=0).isoformat()
 
@@ -41,12 +42,11 @@ server = 'ftp.ebi.ac.uk'
 remote_file = '/pub/databases/genenames/new/json/hgnc_complete_set.json'
 download_fp = '../downloads/hgnc_complete_set.json.gz'
 
-orthologs = {
+orthologs_metadata = {
     "source": namespace['namespace'],
     "src_url": namespace['src_url'],
     "description": namespace['description'] + ' orthologs',
     "version": dt,
-    "orthologies": [],
 }
 
 
@@ -84,36 +84,40 @@ def build_json(force: bool = False):
             log.warning('Will not rebuild data file as it is newer than downloaded source file')
             return False
 
-    with gzip.open(download_fp, 'rt') as f:
-        data = json.load(f)
+    with gzip.open(download_fp, 'rt') as fi, gzip.open(orthologs_fp, 'wt') as fo:
 
-    for doc in data['response']['docs']:
+        fo.write("{}\n".format(json.dumps({'metadata': orthologs_metadata})))
 
-        # Skip unused entries
-        if doc['status'] != 'Approved':
-            continue
+        data = json.load(fi)
 
-        subj_id = f"HGNC:{doc['symbol']}"
-        subj_tax_id = '9606'
+        hgnc_tax_id = 'TAX:9606'
+        mgi_tax_id = 'TAX:10090'
+        rgd_tax_id = 'TAX:10116'
+        for doc in data['response']['docs']:
 
-        for obj_id in doc.get('mgd_id', []):
-            orthologs['orthologies'].append(
-                {
-                    'subject': {'id': subj_id, 'tax_id': subj_tax_id},
-                    'object': {'id': obj_id, 'tax_id': '10090'},
+            # Skip unused entries
+            if doc['status'] != 'Approved':
+                continue
+
+            subj_id = f"HGNC:{doc['symbol']}"
+
+            for obj_id in doc.get('mgd_id', []):
+                ortholog = {
+                    'subject': {'id': subj_id, 'tax_id': hgnc_tax_id},
+                    'object': {'id': obj_id, 'tax_id': mgi_tax_id},
                 }
-            )
 
-        for obj_id in doc.get('rgd_id', []):
-            orthologs['orthologies'].append(
-                {
-                    'subject': {'id': subj_id, 'tax_id': subj_tax_id},
-                    'object': {'id': obj_id, 'tax_id': '10116'},
+                # Add ortholog to JSONL
+                fo.write("{}\n".format(json.dumps({'ortholog': ortholog})))
+
+            for obj_id in doc.get('rgd_id', []):
+                ortholog = {
+                    'subject': {'id': subj_id, 'tax_id': hgnc_tax_id},
+                    'object': {'id': obj_id, 'tax_id': rgd_tax_id},
                 }
-            )
 
-    with gzip.open(orthologs_fp, 'wt') as f:
-        json.dump(orthologs, f, indent=4)
+                # Add ortholog to JSONL
+                fo.write("{}\n".format(json.dumps({'ortholog': ortholog})))
 
 
 def main():
