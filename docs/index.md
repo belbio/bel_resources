@@ -1,2 +1,2 @@
-# BELBio Resource Tools Documentation</title>
+# BELBio Resource Tools Documentation
 
