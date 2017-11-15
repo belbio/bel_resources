@@ -7,7 +7,6 @@ Usage:  mgi.py
 """
 
 import sys
-import re
 import os
 import tempfile
 import json
@@ -26,6 +25,9 @@ import utils
 prefix = 'mgi'
 namespace = utils.get_namespace(prefix)
 ns_prefix = namespace['namespace']
+
+species_labels_fn = '../data/terms/taxonomy_labels.json.gz'
+tax_id = "TAX:10090"
 
 terms_fp = f'../data/terms/{prefix}.jsonl.gz'
 tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
@@ -89,6 +91,9 @@ def build_json(force: bool = False):
             log.warning('Will not rebuild data file as it is newer than downloaded source file')
             return False
 
+    with gzip.open(species_labels_fn, 'r') as fi:
+        species_label = json.load(fi)
+
     # Map gene_types to BEL entity types
     bel_entity_type_map = {
         'gene': ['Gene', 'RNA', 'Protein'],
@@ -118,6 +123,7 @@ def build_json(force: bool = False):
         'other genome feature': ['Gene'],
         'pseudogenic region': ['Gene', 'RNA'],
         'polymorphic pseudogene': ['Gene', 'RNA', 'Protein'],
+        'ribozyme gene': ['Gene', 'RNA'],
         'pseudogenic gene segment': ['Gene', 'RNA'],
         'SRP RNA gene': ['Gene', 'RNA']
     }
@@ -187,7 +193,8 @@ def build_json(force: bool = False):
                 'alt_ids': [utils.get_prefixed_id(ns_prefix, mgi_id)],
                 'label': symbol,
                 'name': name,
-                'species': 'TAX:10090',
+                'species_id': tax_id,
+                'species_label': species_label[tax_id],
                 'entity_types': copy.copy(entity_types),
                 'equivalences': copy.copy(equivalences),
             }

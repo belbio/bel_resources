@@ -28,6 +28,8 @@ prefix = 'sp'
 namespace = utils.get_namespace(prefix)
 ns_prefix = namespace['namespace']
 
+species_labels_fn = '../data/terms/taxonomy_labels.json.gz'
+
 terms_fp = f'../data/terms/{prefix}.jsonl.gz'
 tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
 dt = datetime.datetime.now().replace(microsecond=0).isoformat()
@@ -85,7 +87,7 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
     for line in record:
 
         # Get ID
-        match = re.match('^ID\s+(\w+)', line)
+        match = re.match('^ID\s+(\w+);?', line)
         if match:
             sp_id = match.group(1)
 
@@ -97,12 +99,8 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
         # Get Taxonomy ID
         match = re.match('^OX\s+NCBI_TaxID=(\d+)', line)
         if match:
-            tax_id = match.group(1)
-
-        # Get Gene name
-        match = re.match('^GN\s+Name=(\d+)', line)
-        if match:
-            tax_id = match.group(1)
+            tax_src_id = match.group(1)
+            tax_id = f'TAX:{tax_src_id}'
 
         # Get Equivalences
         match = re.match('^DR\s+(\w+);\s(\w+);\s([\w\-]+)\.', line)
@@ -110,16 +108,16 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
             (db, db_id, extra) = match.group(1, 2, 3)
             if db == 'HGNC':
                 equivalences.append(f'{db}:{extra}')
-                print(equivalences)
+                # print(equivalences)
             elif db == 'MGI':
                 equivalences.append(f'{db}:{extra}')
-                print(equivalences)
+                # print(equivalences)
             if db == 'RGD':
                 equivalences.append(f'{db}:{extra}')
-                print(equivalences)
+                # print(equivalences)
             elif db == 'GeneID':
                 equivalences.append(f'EG:{db_id}')
-                print(equivalences)
+                # print(equivalences)
 
         if re.match('^DE\s+', line):
             de += line.replace('DE', '').strip()
@@ -191,7 +189,8 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
         'label': name,
         'name': name,
         'description': full_name,
-        'species': f'TAX:{tax_id}',
+        'species_id': tax_id,
+        'species_label': species_label.get(tax_id, None),
         'entity_types': ['Gene', 'RNA', 'Protein'],
         'synonyms': copy.copy(synonyms),
         'equivalences': copy.copy(equivalences),
@@ -221,6 +220,10 @@ def build_json(force: bool = False):
     if not force:
         if utils.file_newer(terms_fp, download_fp):
             return False
+
+    global species_label
+    with gzip.open(species_labels_fn, 'r') as fi:
+        species_label = json.load(fi)
 
     with gzip.open(download_fp, 'rt') as fi, gzip.open(terms_fp, 'wt') as fo:
         # Header JSONL record for terminology

@@ -32,6 +32,8 @@ ns_prefix = prefix.upper()
 namespace = utils.get_namespace(prefix)
 
 taxonomy_fp = '../data/terms/taxonomy.jsonl.gz'
+species_labels_fn = '../data/terms/taxonomy_labels.json.gz'
+
 tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
 
 taxonomy_orig = '../downloads/taxdump.tar.gz'
@@ -116,12 +118,12 @@ def build_json(force: bool = False):
         log.debug('Processing nodes.dmp file')
         for line in f:
             # line = line.rstrip('\t|\n')
-            (tax_id, parent_id, rank, embl_code, *rest) = line.split('\t|\t')
+            (src_id, parent_id, rank, embl_code, *rest) = line.split('\t|\t')
 
-            taxonomy[tax_id] = {
+            taxonomy[src_id] = {
                 'namespace': ns_prefix,
-                'src_id': tax_id,
-                'id': f'{ns_prefix}:{tax_id}',
+                'src_id': src_id,
+                'id': f'{ns_prefix}:{src_id}',
                 'parent_id': f'{ns_prefix}:{parent_id}',
                 'children': [],
                 'taxonomy_rank': rank,
@@ -133,19 +135,19 @@ def build_json(force: bool = False):
             }
 
             if rank == 'species':
-                taxonomy[tax_id]['context_types'].append('Species')
+                taxonomy[src_id]['context_types'].append('Species')
 
             if embl_code:
-                taxonomy[tax_id]['embl_code'] = embl_code
+                taxonomy[src_id]['embl_code'] = embl_code
 
     # Flip the hierarchy data structure
-    for tax_id in taxonomy:
-        if taxonomy[tax_id]['parent_id']:
-            parent_id = taxonomy[tax_id]['parent_id'].replace('TAX:', '')
-            if tax_id != '1':  # Skip root node so we don't make root a child of root
-                taxonomy[parent_id]['children'].append(f'TAX:{tax_id}')
+    for src_id in taxonomy:
+        if taxonomy[src_id]['parent_id']:
+            parent_id = taxonomy[src_id]['parent_id'].replace('TAX:', '')
+            if src_id != '1':  # Skip root node so we don't make root a child of root
+                taxonomy[parent_id]['children'].append(f'TAX:{src_id}')
 
-        del taxonomy[tax_id]['parent_id']
+        del taxonomy[src_id]['parent_id']
 
     taxonomy = build_taxonomy_tree(taxonomy)
 
@@ -156,29 +158,42 @@ def build_json(force: bool = False):
         log.debug('Processing names.dmp')
         for line in fi:
             line = line.rstrip('\t|\n')
-            (tax_id, name, unique_variant, name_type) = line.split('\t|\t')
+            (src_id, name, unique_variant, name_type) = line.split('\t|\t')
 
-            if name not in taxonomy[tax_id]['synonyms']:
-                taxonomy[tax_id]['synonyms'].append(name)
+            if name not in taxonomy[src_id]['synonyms']:
+                taxonomy[src_id]['synonyms'].append(name)
 
-            taxonomy[tax_id]['taxonomy_names'].append({'name': name, 'type': name_type})
+            taxonomy[src_id]['taxonomy_names'].append({'name': name, 'type': name_type})
 
             if name_type == 'genbank common name':
-                taxonomy[tax_id]['label'] = preferred_labels.get(tax_id, name)  # Override label if available
+                taxonomy[src_id]['label'] = preferred_labels.get(src_id, name)  # Override label if available
 
             elif name_type == 'scientific name':
-                taxonomy[tax_id]['name'] = name
-                if not taxonomy[tax_id]['label']:
-                    taxonomy[tax_id]['label'] = name
+                taxonomy[src_id]['name'] = name
+                if not taxonomy[src_id]['label']:
+                    taxonomy[src_id]['label'] = name
 
     with gzip.open(taxonomy_fp, 'wt') as fo:
 
         # Header JSONL record for terminology
         fo.write("{}\n".format(json.dumps({'metadata': taxonomy_metadata})))
 
-        for tax_id in taxonomy:
+        for src_id in taxonomy:
             # Add taxonomy record to JSONL
-            fo.write("{}\n".format(json.dumps({'term': taxonomy[tax_id]})))
+            fo.write("{}\n".format(json.dumps({'term': taxonomy[src_id]})))
+
+    species_labels = {}
+
+    for src_id in taxonomy:
+
+        if taxonomy[src_id]['taxonomy_rank'] != 'species':
+            continue
+        tax_id = taxonomy[src_id]['id']
+        label = taxonomy[src_id]['label']
+        species_labels[tax_id] = label
+
+    with gzip.open(species_labels_fn, 'wt') as fo:
+        json.dump(species_labels, fo)
 
 
 def main():

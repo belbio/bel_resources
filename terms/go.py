@@ -107,7 +107,7 @@ def process_obo():
                 'description': ont_term.desc,
                 'synonyms': [],
                 'children': [],
-                'entity_type': [],
+                'entity_types': [],
             }
             if ont_term.name not in unique_names:
                 unique_names[ont_term.name] = 1
@@ -116,11 +116,11 @@ def process_obo():
 
             namespace = ont_term.other['namespace']
             if 'entity_type' in ont_term.other:
-                term['entity_type'].append(ont_term.other['entity_type'])
+                term['entity_types'].append(ont_term.other['entity_type'])
             elif 'biological_process' in namespace:
-                term['entity_type'].append('BiologicalProcess')
+                term['entity_types'].append('BiologicalProcess')
             elif 'cellular_component' in namespace:
-                term['entity_type'].append('Location')
+                term['entity_types'].append('Location')
 
             for syn in ont_term.synonyms:
                 term['synonyms'].append(syn.desc)

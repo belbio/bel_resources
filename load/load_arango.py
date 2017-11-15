@@ -27,6 +27,7 @@ equivalence_term_files = [
     f"{term_fp}/mgi.jsonl.gz",
     f"{term_fp}/rgd.jsonl.gz",
     f"{term_fp}/sp.jsonl.gz",
+    f"{term_fp}/chembl.jsonl.gz",
 ]
 
 client = ArangoClient(
@@ -300,9 +301,9 @@ def main():
 
     # load_orthologs_bulk(ortholog_nodes, ortholog_edges)
 
-    create_ortholog_arangoimp_files()
+    # create_ortholog_arangoimp_files()
 
-    # create_equivalence_arangoimp_files()
+    create_equivalence_arangoimp_files()
 
 
 if __name__ == '__main__':

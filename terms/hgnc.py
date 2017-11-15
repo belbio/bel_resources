@@ -26,6 +26,9 @@ prefix = 'hgnc'
 namespace = utils.get_namespace(prefix)
 ns_prefix = namespace['namespace']
 
+species_labels_fn = '../data/terms/taxonomy_labels.json.gz'
+tax_id = "TAX:9606"
+
 description = "Human Gene Nomenclature Committee namespace"
 src_url = "http://www.genenames.org"
 url_template = "http://www.genenames.org/cgi-bin/gene_symbol_report?hgnc_id=<src_id>"
@@ -80,6 +83,9 @@ def build_json(force: bool = False):
         if utils.file_newer(terms_fp, download_fp):
             log.warning('Will not rebuild data file as it is newer than downloaded source file')
             return False
+
+    with gzip.open(species_labels_fn, 'r') as fi:
+        species_label = json.load(fi)
 
     # Map gene_types to BEL entity types
     bel_entity_type_map = {
@@ -138,7 +144,8 @@ def build_json(force: bool = False):
                 'alt_ids': [utils.get_prefixed_id(ns_prefix, hgnc_id)],
                 'label': doc['symbol'],
                 'name': doc['name'],
-                'species': 'TAX:9606',
+                'species_id': tax_id,
+                'species_label': species_label[tax_id],
                 'description': '',
                 'entity_types': [],
                 'equivalences': [],

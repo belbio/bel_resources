@@ -13,10 +13,10 @@ import re
 import gzip
 import shutil
 import datetime
-import logging
 import yaml
 from typing import Tuple, Mapping, Any
 
+import logging
 log = logging.getLogger(__name__)
 
 # Globals
@@ -204,6 +204,7 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzipfla
                 return (True, f'Downloaded {filename}')
             except Exception as e:
                 ftp.quit()
+                log.error(f'Could not download {filename}')
                 return(False, f'Error downloading file: {e}')
     else:
         with open(lfile, mode='wb') as f:
@@ -213,6 +214,7 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzipfla
                 return (True, f'Downloaded {filename}')
             except Exception as e:
                 ftp.quit()
+                log.error(f'Could not download {filename}')
                 return(False, f'Error downloading file: {e}')
 
 

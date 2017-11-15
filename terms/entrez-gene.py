@@ -27,6 +27,8 @@ prefix = 'eg'
 namespace = utils.get_namespace(prefix)
 ns_prefix = namespace['namespace']
 
+species_labels_fn = '../data/terms/taxonomy_labels.json.gz'
+
 terms_fp = f'../data/terms/{prefix}.jsonl.gz'
 tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
 dt = datetime.datetime.now().replace(microsecond=0).isoformat()
@@ -111,6 +113,9 @@ def build_json(force: bool = False):
             log.warning('Will not rebuild data file as it is newer than downloaded source file')
             return False
 
+    with gzip.open(species_labels_fn, 'r') as fi:
+        species_label = json.load(fi)
+
     missing_entity_types = {}
     bel_entity_type_map = {
         'snoRNA': ['Gene', 'RNA'],
@@ -134,7 +139,8 @@ def build_json(force: bool = False):
         for line in fi:
 
             cols = line.split('\t')
-            (tax_id, gene_id, symbol, synonyms, desc, gene_type, name) = (cols[0], cols[1], cols[2], cols[4], cols[8], cols[9], cols[11], )
+            (tax_src_id, gene_id, symbol, synonyms, desc, gene_type, name) = (cols[0], cols[1], cols[2], cols[4], cols[8], cols[9], cols[11], )
+            tax_id = f'TAX:{tax_src_id}'
 
             synonyms = synonyms.rstrip()
             if synonyms == '-':
@@ -158,7 +164,8 @@ def build_json(force: bool = False):
                 'label': symbol,
                 'name': name,
                 'description': desc,
-                'species': f'TAX:{tax_id}',
+                'species_id': tax_id,
+                'species_label': species_label.get(tax_id, None),
             }
             if name != '-':
                 term['name'] = name

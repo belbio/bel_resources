@@ -11,6 +11,7 @@ import elasticsearch.helpers
 from elasticsearch import Elasticsearch
 import glob
 import time
+import datetime
 import copy
 import gzip
 import json
@@ -22,7 +23,11 @@ import logging.config
 es_conn = 'http://localhost:9200'
 es = Elasticsearch([es_conn], send_get_body_as='POST')
 
+today_str = datetime.date.today().strftime("%Y-%m-%d")
+
 term_dir = "../data/terms/*jsonl*"
+
+index_name = 'terms_' + today_str
 
 
 def collect_term_datasets():

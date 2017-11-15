@@ -93,7 +93,8 @@ def process_types(mesh_id, mns, sts):
                 context_types.append('Cell')
             if re.match('A11.284', mn):
                 entity_types.append('Location')
-            if re.match('C|F03', mn):
+                context_types.append('CellStructure')
+            if re.match('C|F', mn):  # Original OpenBEL was C|F03 - Charles Hoyt suggested C|F
                 context_types.append('Disease')
             if re.match('G', mn) and not re.match('G01|G15|G17', mn):
                 entity_types.append('BiologicalProcess')

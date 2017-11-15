@@ -36,6 +36,7 @@ sp:
     The primary (first) accession ID is used as the canonical identifier.
     Any additional accessions are added to the alt_ids listing.  The ID field
     is added as an alt_id.
+
 chembl:
   namespace: CHEMBL
   src_url: https://www.ebi.ac.uk/chembl/

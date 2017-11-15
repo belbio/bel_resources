@@ -6,14 +6,12 @@ mappings:
       completions:
         type: completion
         contexts:
-          - name: species
+          - name: species_id
             type: category
           - name: entity_types
             type: category
           - name: context_types
             type: category
-      namespace:
-        type: keyword
       src_id:
         type: keyword
       namespace:
@@ -34,7 +32,9 @@ mappings:
         type: keyword
       synonyms:
         type: text
-      species:
+      species_id:
+        type: keyword
+      species_label:
         type: keyword
       obsolete_ids:
         type: keyword
