@@ -94,7 +94,9 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
         # Get accessions
         if re.match('^AC', line):
             ac_line = re.sub('^AC\s+', '', line).rstrip()
-            accessions.extend(ac_line.split('; '))
+            ac_line = re.sub(';$', '', ac_line)
+            ac_line = re.sub(';\s+', ';', ac_line)
+            accessions.extend(ac_line.split(';'))
 
         # Get Taxonomy ID
         match = re.match('^OX\s+NCBI_TaxID=(\d+)', line)

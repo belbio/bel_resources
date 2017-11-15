@@ -115,7 +115,9 @@ def build_json(force: bool = False):
             if ncbi_gene_id:
                 equivalences.append(f'EG:{ncbi_gene_id}')
             if uniprot_id:
-                equivalences.append(f'UP:{uniprot_id}')
+                uniprots = uniprot_id.split(';')
+                for uniprot in uniprots:
+                    equivalences.append(f'SP:{uniprot}')
 
             entity_types = []
             if gene_type not in bel_entity_type_map:
