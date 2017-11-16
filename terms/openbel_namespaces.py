@@ -140,14 +140,24 @@ def build_json(nsfiles):
             terms = []
             for value in ns_dict['Values']:
 
-                term_id = value['term_id']
+                name = value['term_id']
+                alt_ids = []
+
+                if utils.needs_quotes(name):
+                    term_id = f'{namespace}:"{name}"'
+                    if not utils.has_whitespace(name):
+                        alt_ids.append(f'{namespace}:{name}')
+                else:
+                    term_id = f'{namespace}:{name}'
+
                 entity_types = value['entity_types']
                 term = {
                     "namespace": namespace,
                     "src_id": '',
                     "id": term_id,
                     "label": '',
-                    "name": term_id,
+                    "name": name,
+                    "alt_ids": alt_ids,
                     "entity_types": entity_types,
                 }
                 terms.append(copy.deepcopy(term))

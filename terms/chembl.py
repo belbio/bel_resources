@@ -122,14 +122,18 @@ def query_db() -> Iterable[Mapping[str, Any]]:
             syns = row['syns']
             syns = syns.lower().split('||')
             pref_name = row['pref_name']
+            alt_ids = []
             if pref_name:
                 pref_name = pref_name.lower()
                 name = pref_name
-                alt_id = chembl_id
-                if re.search('\s+', pref_name):
+                alt_ids.append(chembl_id)
+                if utils.needs_quotes(pref_name):
                     chembl_id = f'CHEMBL:"{pref_name}"'
+                    if not utils.has_whitespace(pref_name):
+                        alt_ids.append(f'CHEMBL:{pref_name}')  # add non-quoted version to alt_ids
                 else:
                     chembl_id = f'CHEMBL:{pref_name}'
+
             elif syns[0]:
                 name = syns[0]
             else:
@@ -140,7 +144,7 @@ def query_db() -> Iterable[Mapping[str, Any]]:
                 "pref_name": pref_name,
                 "chembl_id": chembl_id,
                 "src_id": src_id,
-                "alt_id": alt_id,
+                "alt_ids": alt_ids,
                 "syns": copy.copy(syns),
             }
             if row['standard_inchi_key']:
@@ -181,7 +185,7 @@ def build_json(force: bool = False):
                 'namespace': ns_prefix,
                 'src_id': row['src_id'],
                 'id': row['chembl_id'],
-                'alt_ids': [row['alt_id']],
+                'alt_ids': row['alt_ids'],
                 'label': row['name'],
                 'name': row['name'],
                 'synonyms': copy.copy(list(set(row['syns']))),

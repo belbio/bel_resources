@@ -218,6 +218,26 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzipfla
                 return(False, f'Error downloading file: {e}')
 
 
+def needs_quotes(namespace_value: str) -> bool:
+    """Check if we need quotes around namespace value string"""
+
+    # If non-word char, anything other than [A-Za-z0-9_], then need quotes
+    if re.search('\W', namespace_value):
+        return True
+
+    return False
+
+
+def has_whitespace(namespace_value: str) -> bool:
+    """Check if we can use this as an altid - e.g. non-word chars, but no spaces"""
+
+    # If non-word char, anything other than [A-Za-z0-9_], then need quotes
+    if re.search('\s', namespace_value):
+        return True
+
+    return False
+
+
 def main():
 
     res = file_newer('./data/terms/hgnc.json', './downloads/hgnc_complete_set.json')
