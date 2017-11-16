@@ -153,13 +153,16 @@ def build_json(nsfiles):
                 entity_types = value['entity_types']
                 term = {
                     "namespace": namespace,
-                    "src_id": '',
                     "id": term_id,
-                    "label": '',
                     "name": name,
-                    "alt_ids": alt_ids,
                     "entity_types": entity_types,
                 }
+                if alt_ids:
+                    term['alt_ids'] = alt_ids
+
+                if namespace == 'ZFIN':
+                    term['species_id'] = 'TAX:7955'
+                    term['species_label'] = 'zebrafish'
                 terms.append(copy.deepcopy(term))
 
             with gzip.open(terms_filename, 'wt') as fo:
@@ -170,9 +173,10 @@ def build_json(nsfiles):
 
 
 def main():
-    nsfiles = update_data_files()
 
+    nsfiles = update_data_files()
     build_json(nsfiles)
+
 
 if __name__ == '__main__':
     # Setup logging

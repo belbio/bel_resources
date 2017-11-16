@@ -48,22 +48,24 @@ def get_terms(term_fn):
             count += 1
             term = json.loads(line)['term']
 
-            if term['name'] == term['label']:
+            name = None
+            if term.get('name', None) and term.get('label', None) and term['name'] == term['label']:
                 name = term['name']
-            else:
+            elif term.get('name', None) and term.get('label', None):
                 name = [term['name'], term['label']]
 
             # create completions
             contexts = {
-                "species": term.get('species', []),
+                "species_id": term.get('species', []),
                 "entity_types": term.get('entity_types', []),
                 "context_types": term.get('context_types', []),
             }
 
-            term['completions'] = [
-                {"input": term['id'], "weight": 10, "contexts": contexts},
-                {"input": name, "weight": 10, "contexts": contexts},
-            ]
+            term['completions'] = []
+            term['completions'].append({"input": term['id'], "weight": 10, "contexts": contexts})
+
+            if name:
+                term['completions'].append({"input": name, "weight": 10, "contexts": contexts})
 
             if 'synonyms' in term:
                 term['completions'].append({"input": term['synonyms'], "weight": 3, "contexts": contexts})
@@ -139,12 +141,11 @@ def main():
     import re
 
     for fn in files:
-        if not re.search('tax', fn):  # or re.search('taxonomy', fn):
-            continue
+        if re.search('belns', fn) or re.search('belns', fn):  # or re.search('taxonomy', fn):
 
-        print(f'Starting {fn}')
-        with FuncTimer(f'load terms {fn}', info=True):
-            load_term_dataset(fn)
+            print(f'Starting {fn}')
+            with FuncTimer(f'load terms {fn}', info=True):
+                load_term_dataset(fn)
 
 
 if __name__ == '__main__':
