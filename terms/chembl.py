@@ -16,7 +16,7 @@ import datetime
 import sqlite3
 import copy
 import gzip
-from typing import List, Mapping, Any
+from typing import List, Mapping, Any, Iterable
 import logging
 import logging.config
 
@@ -65,7 +65,36 @@ def update_data_files() -> bool:
     return changed
 
 
-def query_db():
+def pref_name_dupes():
+    """Check that pref_name in chembl is uniq"""
+
+    check_pref_term_sql = """
+        select
+            chembl_id, pref_name
+        from
+            molecule_dictionary
+    """
+    db_filename = '../downloads/chembl_23/chembl_23_sqlite/chembl_23.db'
+    conn = sqlite3.connect(db_filename)
+    conn.row_factory = sqlite3.Row
+
+    dupes_flag = False  # set to false if any duplicates exist
+    with conn:
+        check_pref_term_uniqueness = {}
+        for row in conn.execute(check_pref_term_sql):
+            pref_name = row['pref_name']
+            if pref_name:
+                pref_name = pref_name.lower()
+            chembl_id = row['chembl_id']
+            if check_pref_term_uniqueness.get(pref_name, None):
+                log.error(f'CHEMBL pref_name used for multiple chembl_ids {chembl_id}, {check_pref_term_uniqueness["pref_name"]}')
+                dupes_flag = True
+
+    return dupes_flag
+
+
+def query_db() -> Iterable[Mapping[str, Any]]:
+    """Generator to run chembl term queries using sqlite chembl db"""
     log.error('This script requires MANUAL interaction to get latest chembl and untar it.')
     db_filename = '../downloads/chembl_23/chembl_23_sqlite/chembl_23.db'
     conn = sqlite3.connect(db_filename)
@@ -90,18 +119,28 @@ def query_db():
 
             chembl_id = row['chembl_id'].replace('CHEMBL', 'CHEMBL:')
             src_id = row['chembl_id'].replace('CHEMBL', '')
-            syns = row['syns'].split('||')
-            if row['pref_name']:
-                name = row['pref_name']
+            syns = row['syns']
+            syns = syns.lower().split('||')
+            pref_name = row['pref_name']
+            if pref_name:
+                pref_name = pref_name.lower()
+                name = pref_name
+                alt_id = chembl_id
+                if re.search('\s+', pref_name):
+                    chembl_id = f'CHEMBL:"{pref_name}"'
+                else:
+                    chembl_id = f'CHEMBL:{pref_name}'
             elif syns[0]:
-                syns[0]
+                name = syns[0]
             else:
                 name = chembl_id
 
             term = {
                 "name": name,
+                "pref_name": pref_name,
                 "chembl_id": chembl_id,
                 "src_id": src_id,
+                "alt_id": alt_id,
                 "syns": copy.copy(syns),
             }
             if row['standard_inchi_key']:
@@ -137,10 +176,12 @@ def build_json(force: bool = False):
         fo.write("{}\n".format(json.dumps({'metadata': terminology_metadata})))
 
         for row in query_db():
+
             term = {
                 'namespace': ns_prefix,
                 'src_id': row['src_id'],
                 'id': row['chembl_id'],
+                'alt_ids': [row['alt_id']],
                 'label': row['name'],
                 'name': row['name'],
                 'synonyms': copy.copy(list(set(row['syns']))),
@@ -157,6 +198,9 @@ def build_json(force: bool = False):
 
 
 def main():
+
+    if pref_name_dupes():
+        quit()
 
     # Cannot detect changes as ftp server doesn't support MLSD cmd
     update_data_files()
