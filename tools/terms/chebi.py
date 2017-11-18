@@ -104,10 +104,12 @@ def process_obo(force: bool = False):
             if subset not in ['2_STAR', '3_STAR']:
                 continue
 
+            name_id = utils.get_prefixed_id(ns_prefix, ont_term.name)
+
             term = {
                 'namespace': ns_prefix,
                 'src_id': ont_term.id,
-                'id': utils.get_prefixed_id(ns_prefix, ont_term.name),
+                'id': name_id,
                 'alt_ids': [ont_term.id],
                 'label': ont_term.name,
                 'name': ont_term.name,
@@ -116,6 +118,11 @@ def process_obo(force: bool = False):
                 'entity_types': ['Abundance'],
                 'equivalences': [],
             }
+
+            # Some chebi names are over 500 chars long
+            if len(name_id) > 80:
+                term['id'] = ont_term.id
+                term['alt_ids'] = [name_id]
 
             if ont_term.name not in unique_names:
                 unique_names[ont_term.name] = 1
