@@ -2,7 +2,7 @@ version: 1
 disable_existing_loggers: False
 formatters:
   simple:
-    format: '%(name)s - %(levelname)s - %(asctime)s || %(message)s'
+    format: '%(levelname)s::%(name)s::%(asctime)s   %(message)s'
 handlers:
   console:
     class: logging.StreamHandler

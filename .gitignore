@@ -1,12 +1,9 @@
 # Project specific
 
-Config.py
-
 data/
 downloads/
+staging/
 processing.logs
-data_arangodb
-data_elasticsearch
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
