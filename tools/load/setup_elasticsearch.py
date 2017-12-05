@@ -12,13 +12,13 @@ import logging
 import logging.config
 import click
 
-from tools.utils.Config import config
+from bel_lang.Config import config
 
 # Globals
 server = config['bel_api']['servers']['elasticsearch']
 es = Elasticsearch([server], send_get_body_as='POST')
 
-mapping_term_fn = f"{config['bel_resources']['file_locations']['tools']}/load/setup_elasticsearch.yaml"
+mapping_term_fn = f"{config['bel_resources']['file_locations']['tools']}/load/setup_elasticsearch.yml"
 
 with open(mapping_term_fn, 'r') as f:
     mapping_term = yaml.load(f)
@@ -45,7 +45,7 @@ def create_terms_index(clean, index_name):
 
 @click.command()
 @click.option('--clean/--no-clean', default=False, help="Remove indexes and re-create them")
-@click.option('--index_name', default='terms_blue', help='Use this name for index.')
+@click.option('--index_name', default='terms_blue', help='Use this name for index. Default is "terms_blue"')
 def main(clean, index_name):
     """Setup Elasticsearch term indexes
 
@@ -53,7 +53,7 @@ def main(clean, index_name):
     if the indexes don't exist.  The --clean option will force removal of the
     index if it exists.
 
-    The index_name will be aliased to the index 'terms' when it's ready
+    The index_name should be aliased to the index 'terms' when it's ready
     """
 
     create_terms_index(clean, index_name)

@@ -7,14 +7,14 @@ Usage:  taxonomy.py
 This utility will download new versions of the taxonomy file
 into the ../downloads directory.
 
-It will read in taxonomy species label overrides from the taxonomy_labels.yaml
+It will read in taxonomy species label overrides from the taxonomy_labels.yml
 in the resources folder.
 
 A result file is created as data/terms/tax.jsonl.gz file that will act as the load
 file for taxonomy data into Elasticsearch and ArangoDB.
 
 ALT IDs: Add name as alternate ID if scientific names and taxonomy rank is species
-ALT IDs: preferred taxonomy label from resources/taxonomy_labels.yaml
+ALT IDs: preferred taxonomy label from resources/taxonomy_labels.yml
 
 NOTE: Reviewed all of the species scientific names and the only ones that were not unique
       had the pattern of Genus sp. - so we are restricting any scientific names with sp.
@@ -33,7 +33,7 @@ import logging
 import logging.config
 
 import tools.utils.utils as utils
-from tools.utils.Config import config
+from bel_lang.Config import config
 
 # Globals
 namespace_key = 'tax'
@@ -54,7 +54,7 @@ local_data_fp = f'{config["bel_resources"]["file_locations"]["downloads"]}/{name
 
 def get_metadata():
     # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yaml file
+    # can be overridden in belbio_conf.yml file
     dt = datetime.datetime.now().replace(microsecond=0).isoformat()
     metadata = {
         "name": namespace_def['namespace'],
@@ -108,7 +108,7 @@ def build_json(force: bool = False):
             log.warning('Will not rebuild data file as it is newer than downloaded source file')
             return False
 
-    preferred_labels_fn = f'{config["bel_resources"]["file_locations"]["resources"]}/taxonomy_labels.yaml'
+    preferred_labels_fn = f'{config["bel_resources"]["file_locations"]["resources"]}/taxonomy_labels.yml'
     with open(preferred_labels_fn, 'r') as f:
         preferred_labels = yaml.load(f, Loader=yaml.BaseLoader)  # Using BaseLoader to read keys as strings
 
@@ -186,10 +186,7 @@ def build_json(force: bool = False):
                 # Add name as alternate ID if scientific names and taxonomy rank is species
                 if terms[src_id]['taxonomy_rank'] == 'species':
                     if not re.search('sp.', name):
-                        if utils.needs_quotes(name):
-                            terms[src_id]['alt_ids'].append(f'{ns_prefix}:"{name}"')
-                        else:
-                            terms[src_id]['alt_ids'].append(f'{ns_prefix}:{name}')
+                        terms[src_id]["alt_ids"].append(utils.get_prefixed_id(ns_prefix, name))
 
     with gzip.open(terms_fp, 'wt') as fo:
 
@@ -229,7 +226,7 @@ if __name__ == '__main__':
     module_fn = module_fn.replace('.py', '')
 
     # Setup logging
-    logging_conf_fn = f'{config["bel_resources"]["file_locations"]["root"]}/logging-conf.yaml'
+    logging_conf_fn = f'{config["bel_resources"]["file_locations"]["root"]}/logging_conf.yml'
     with open(logging_conf_fn, mode='r') as f:
         logging.config.dictConfig(yaml.load(f))
     log = logging.getLogger(f'{module_fn}-terms')

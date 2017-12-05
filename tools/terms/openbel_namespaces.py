@@ -13,13 +13,11 @@ import json
 import yaml
 import re
 
-# from configparser import ConfigParser
-
 import logging
 import logging.config
 
 import tools.utils.utils as utils
-from tools.utils.Config import config
+from bel_lang.Config import config
 
 entity_type_conversion = {
     'A': 'Abundance',
@@ -148,12 +146,7 @@ def build_json(nsfiles):
                 name = value['term_id']
                 alt_ids = []
 
-                if utils.needs_quotes(name):
-                    term_id = f'{namespace}:"{name}"'
-                    if not utils.has_whitespace(name):
-                        alt_ids.append(f'{namespace}:{name}')
-                else:
-                    term_id = f'{namespace}:{name}'
+                term_id = utils.get_prefixed_id(namespace, name)
 
                 entity_types = value['entity_types']
                 term = {
@@ -189,7 +182,7 @@ if __name__ == '__main__':
     module_fn = os.path.basename(__file__)
     module_fn = module_fn.replace('.py', '')
 
-    logging_conf_fn = f'{config["bel_resources"]["file_locations"]["root"]}/logging-conf.yaml'
+    logging_conf_fn = f'{config["bel_resources"]["file_locations"]["root"]}/logging_conf.yml'
     with open(logging_conf_fn, mode='r') as f:
         logging.config.dictConfig(yaml.load(f))
         log = logging.getLogger(f'{module_fn}-terms')

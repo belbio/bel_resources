@@ -19,7 +19,7 @@ import logging.config
 import copy
 
 import tools.utils.utils as utils
-from tools.utils.Config import config
+from bel_lang.Config import config
 
 # Globals
 namespace_key = 'mesh'
@@ -70,7 +70,7 @@ chemicals_ST = ('T116', 'T195', 'T123', 'T122', 'T118', 'T103', 'T120',
 
 def get_metadata():
     # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yaml file
+    # can be overridden in belbio_conf.yml file
     dt = datetime.datetime.now().replace(microsecond=0).isoformat()
     metadata = {
         "name": namespace_def['namespace'],
@@ -108,24 +108,25 @@ def update_data_files() -> bool:
 def process_types(mesh_id, mns, sts):
 
     global chemicals_ST
-    entity_types = []
-    context_types = []
+    entity_types = set()
+    context_types = set()
 
     if mns:  # Description records
         for mn in mns:
             if re.match('A', mn) and not re.match('A11', mn):
-                context_types.append('Anatomy')
+                context_types.add('Anatomy')
             if re.match('A11', mn) and not re.match('A11.284', mn):
-                context_types.append('Cell')
+                context_types.add('Cell')
             if re.match('A11.284', mn):
-                entity_types.append('Location')
-                context_types.append('CellStructure')
+                entity_types.add('Location')
+                context_types.add('CellStructure')
             if re.match('C|F', mn):  # Original OpenBEL was C|F03 - Charles Hoyt suggested C|F
-                context_types.append('Disease')
+                context_types.add('Disease')
+                entity_types.add('Pathology')
             if re.match('G', mn) and not re.match('G01|G15|G17', mn):
-                entity_types.append('BiologicalProcess')
+                entity_types.add('BiologicalProcess')
             if re.match('D', mn):
-                entity_types.append('Abundance')
+                entity_types.add('Abundance')
 
     elif sts:  # Concepts
         flag = 0
@@ -134,9 +135,9 @@ def process_types(mesh_id, mns, sts):
                 flag = 1
                 break
         if flag:
-            entity_types.append('Abundance')
+            entity_types.add('Abundance')
 
-    return (entity_types, context_types)
+    return (list(entity_types), list(context_types))
 
 
 def process_synonyms(syns):

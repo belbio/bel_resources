@@ -39,7 +39,7 @@ pip install -r ./requirements.txt
 echo "Do the following to finish setting up"
 echo "  1. Change directory to bel_resources"
 echo "  2. Run 'source .venv/bin/activate' to enable the virtualenv"
-echo "  3. Copy belbio_conf.yaml.example to belbio_conf.yaml or merge into your ~/.belbio_conf file"
+echo "  3. Copy belbio_conf.yml.example to belbio_conf.yml or merge into your ~/.belbio_conf file"
 echo "  4. Change any configuration in the belbio_conf file as needed"
 
 echo

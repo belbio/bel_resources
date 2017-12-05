@@ -19,7 +19,7 @@ import logging
 import logging.config
 
 import tools.utils.utils as utils
-from tools.utils.Config import config
+from bel_lang.Config import config
 
 # Globals
 namespace_key = 'rgd'
@@ -46,7 +46,7 @@ local_data_fp = f'{config["bel_resources"]["file_locations"]["downloads"]}/{name
 
 def get_metadata():
     # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yaml file
+    # can be overridden in belbio_conf.yml file
     dt = datetime.datetime.now().replace(microsecond=0).isoformat()
     metadata = {
         "name": namespace_def['namespace'],

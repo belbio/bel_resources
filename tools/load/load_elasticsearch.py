@@ -20,9 +20,16 @@ import yaml
 import logging
 import logging.config
 import click
-import re
+import timy
 
-from tools.utils.Config import config
+import tools.utils.utils as utils
+from bel_lang.Config import config
+
+from timy.settings import (
+    timy_config,
+    TrackingMode
+)
+timy_config.tracking_mode = TrackingMode.LOGGING
 
 # Globals
 server = config['bel_api']['servers']['elasticsearch']
@@ -50,42 +57,55 @@ def get_terms(term_fn: str, index_name: str) -> Iterable[Mapping[str, Any]]:
         if 'metadata' not in metadata:
             log.error(f'Missing metadata entry for {term_fn}')
 
-        count = 0
-        for line in f:
-            count += 1
-            term = json.loads(line)['term']
+        with timy.Timer() as timer:
+            counter = 0
+            step = 10000
+            for line in f:
+                counter += 1
+                if counter % step == 0:
+                    timer.track(f'Yielded {counter} terms')
+                    # log.info(f"Yielded {counter} terms {timer.track()}")
 
-            name = None
-            if term.get('name', None) and term.get('label', None) and term['name'] == term['label']:
-                name = term['name']
-            elif term.get('name', None) and term.get('label', None):
-                name = [term['name'], term['label']]
+                term = json.loads(line)['term']
 
-            # create completions
-            contexts = {
-                "species_id": term.get('species', []),
-                "entity_types": term.get('entity_types', []),
-                "context_types": term.get('context_types', []),
-            }
+                name = None
+                if term.get('name', None) and term.get('label', None) and term['name'] == term['label']:
+                    name = term['name']
+                elif term.get('name', None) and term.get('label', None):
+                    name = [term['name'], term['label']]
 
-            term['completions'] = []
-            term['completions'].append({"input": term['id'], "weight": 10, "contexts": contexts})
+                all_term_ids = set()
+                for term_id in [term['id']] + term.get('alt_ids', []):
+                    all_term_ids.add(term_id)
+                    all_term_ids.add(utils.lowercase_term_id(term_id))
 
-            if name:
-                term['completions'].append({"input": name, "weight": 10, "contexts": contexts})
+                term['alt_ids'] = copy.copy(list(all_term_ids))
 
-            if 'synonyms' in term:
-                term['completions'].append({"input": term['synonyms'], "weight": 3, "contexts": contexts})
-            if 'alt_ids' in term:
-                term['completions'].append({"input": term['alt_ids'], "weight": 1, "contexts": contexts})
+                # create completions
+                contexts = {
+                    "species_id": term.get('species', []),
+                    "entity_types": term.get('entity_types', []),
+                    "context_types": term.get('context_types', []),
+                }
 
-            yield {
-                '_op_type': 'index',
-                '_index': index_name,
-                '_type': 'term',
-                '_id': term['id'],
-                '_source': copy.deepcopy(term)
-            }
+                term['completions'] = []
+                term['completions'].append({"input": term['id'], "weight": 10, "contexts": contexts})
+
+                if name:
+                    term['completions'].append({"input": name, "weight": 10, "contexts": contexts})
+
+                if 'synonyms' in term:
+                    term['completions'].append({"input": term['synonyms'], "weight": 3, "contexts": contexts})
+                if 'alt_ids' in term:
+                    term['completions'].append({"input": term['alt_ids'], "weight": 1, "contexts": contexts})
+
+                yield {
+                    '_op_type': 'index',
+                    '_index': index_name,
+                    '_type': 'term',
+                    '_id': term['id'],
+                    '_source': copy.deepcopy(term)
+                }
 
 
 def load_term_dataset(term_fn: str, index_name: str):
@@ -101,6 +121,8 @@ def load_term_dataset(term_fn: str, index_name: str):
 
     try:
         results = elasticsearch.helpers.bulk(es, terms, chunk_size=chunk_size)
+
+        # elasticsearch.helpers.parallel_bulk(es, terms, chunk_size=chunk_size, thread_count=4)
         if len(results[1]) > 0:
             log.error('Bulk load errors {}'.format(results))
     except elasticsearch.ElasticsearchException as e:
@@ -143,7 +165,7 @@ class FuncTimer():
 
 @click.command()
 @click.argument('namespaces', nargs=-1)
-@click.option('--index_name', default='terms_blue', help='Use this name for index.')
+@click.option('--index_name', default='terms_blue', help='Use this name for index.  Default is "terms_blue"')
 @click.option('--runall/--no-runall', default=False, help="Load all namespaces")
 def main(namespaces, index_name, runall):
     """Load Namespaces

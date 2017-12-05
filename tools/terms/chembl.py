@@ -21,7 +21,7 @@ import logging
 import logging.config
 
 import tools.utils.utils as utils
-from tools.utils.Config import config
+from bel_lang.Config import config
 
 # Globals
 namespace_key = 'chembl'
@@ -42,7 +42,7 @@ local_data_fp = f'{config["bel_resources"]["file_locations"]["downloads"]}/{base
 
 def get_metadata():
     # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yaml file
+    # can be overridden in belbio_conf.yml file
     dt = datetime.datetime.now().replace(microsecond=0).isoformat()
     metadata = {
         "name": namespace_def['namespace'],
@@ -134,16 +134,12 @@ def query_db() -> Iterable[Mapping[str, Any]]:
             syns = syns.lower().split('||')
             pref_name = row['pref_name']
             alt_ids = []
+
             if pref_name:
+                alt_ids.append(chembl_id)
                 pref_name = pref_name.lower()
                 name = pref_name
-                alt_ids.append(chembl_id)
-                if utils.needs_quotes(pref_name):
-                    chembl_id = f'CHEMBL:"{pref_name}"'
-                    if not utils.has_whitespace(pref_name):
-                        alt_ids.append(f'CHEMBL:{pref_name}')  # add non-quoted version to alt_ids
-                else:
-                    chembl_id = f'CHEMBL:{pref_name}'
+                chembl_id = utils.get_prefixed_id(ns_prefix, pref_name)
 
             elif syns[0]:
                 name = syns[0]
@@ -233,7 +229,7 @@ if __name__ == '__main__':
     module_fn = os.path.basename(__file__)
     module_fn = module_fn.replace('.py', '')
 
-    logging_conf_fn = f'{config["bel_resources"]["file_locations"]["root"]}/logging-conf.yaml'
+    logging_conf_fn = f'{config["bel_resources"]["file_locations"]["root"]}/logging_conf.yml'
     with open(logging_conf_fn, mode='r') as f:
         logging.config.dictConfig(yaml.load(f))
         log = logging.getLogger(f'{module_fn}-terms')

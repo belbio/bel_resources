@@ -6,7 +6,6 @@ Usage:  swissprot.py
 
 """
 
-import sys
 import re
 import os
 import tempfile
@@ -20,7 +19,7 @@ import logging
 import logging.config
 
 import tools.utils.utils as utils
-from tools.utils.Config import config
+from bel_lang.Config import config
 
 # Globals
 namespace_key = 'sp'
@@ -41,15 +40,21 @@ source_data_fp = '/pub/databases/uniprot/current_release/knowledgebase/complete/
 # Local data filepath setup
 basename = os.path.basename(source_data_fp)
 gzip_flag = False
-if not re.search('.gz$', basename):  # we basically gzip everything retrieved that isn't already gzipped
+# we basically gzip everything retrieved that isn't already gzipped
+if not re.search('.gz$', basename):
     gzip_flag = True
     basename = f'{basename}.gz'
 local_data_fp = f'{config["bel_resources"]["file_locations"]["downloads"]}/{namespace_key}_{basename}'
 
+terms_data = config["bel_resources"]["file_locations"]["terms_data"]
+species_labels_fn = f'{terms_data}/tax_labels.json.gz'
+with gzip.open(species_labels_fn, 'r') as fi:
+    species_label = json.load(fi)
+
 
 def get_metadata():
     # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yaml file
+    # can be overridden in belbio_conf.yml file
     dt = datetime.datetime.now().replace(microsecond=0).isoformat()
     metadata = {
         "name": namespace_def['namespace'],
@@ -97,11 +102,6 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
     accessions = []
     de = ''
     gn = ''
-
-    terms_data = config["bel_resources"]["file_locations"]["terms_data"]
-    species_labels_fn = f'{terms_data}/tax_labels.json.gz'
-    with gzip.open(species_labels_fn, 'r') as fi:
-        species_label = json.load(fi)
 
     for line in record:
 
@@ -278,4 +278,3 @@ if __name__ == '__main__':
         log = logging.getLogger(f'{module_fn}-terms')
 
     main()
-

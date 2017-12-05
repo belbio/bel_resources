@@ -16,11 +16,10 @@ import datetime
 import yaml
 from typing import Tuple, Mapping, Any
 
-from tools.utils.Config import config
+
 
 import logging
 log = logging.getLogger(__name__)
-
 
 # Automatically-creating-directories-with-file-output
 # https://stackoverflow.com/questions/12517451/automatically-creating-directories-with-file-output
@@ -62,7 +61,7 @@ def get_namespace(prefix: str) -> Mapping[str, Any]:
     """Get namespace info
 
     Args:
-        prefix (str): prefix or key of namespaces.yaml file
+        prefix (str): prefix or key of namespaces.yml file
 
     Returns:
         Mapping[str, Any]: namespace information as dictionary
@@ -78,10 +77,33 @@ def get_namespace(prefix: str) -> Mapping[str, Any]:
 def get_prefixed_id(ns_prefix, term_id):
     """Prepend namespace prefix on id adding quotes if necessary"""
 
-    if ' ' in term_id:
+    if re.search('[),\s]', term_id):  # only if it contains whitespace, comma or ')'
         return f'{ns_prefix}:"{term_id}"'
     else:
         return f'{ns_prefix}:{term_id}'
+
+
+def needs_quotes(namespace_value: str) -> bool:
+    """Check if we need quotes around namespace value string"""
+
+    if re.search('[),\s]', namespace_value):  # only if it contains whitespace, comma or ')'
+        return True
+    return False
+
+
+def lowercase_term_id(term_id: str) -> str:
+    """Lowercase the term value (not the namespace prefix)
+
+    Args:
+        term_id (str): term identifier with namespace prefix, e.g. MESH:Atherosclerosis
+
+    Returns:
+        str: lowercased, e.g. MESH:atherosclerosis
+    """
+    (ns, val) = term_id.split(':', maxsplit=1)
+    term_id = f'{ns}:{val.lower()}'
+
+    return term_id
 
 
 def timestamp_to_date(ts: int) -> str:
@@ -224,27 +246,6 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
                 ftp.quit()
                 log.error(f'Could not download {filename}')
                 return(False, f'Error downloading file: {e}')
-
-
-def needs_quotes(namespace_value: str) -> bool:
-    """Check if we need quotes around namespace value string"""
-
-    # If non-word char, anything other than [A-Za-z0-9_], then need quotes
-    if re.search('\W', namespace_value):
-        return True
-
-    return False
-
-
-def has_whitespace(namespace_value: str) -> bool:
-    """Check if we can use this as an alt_id - e.g. non-word chars, but no spaces"""
-
-    # TODO - don't think we really need this - ElasticSearch will work with spaces
-    # If non-word char, anything other than [A-Za-z0-9_], then need quotes
-    if re.search('\s', namespace_value):
-        return True
-
-    return False
 
 
 def main():

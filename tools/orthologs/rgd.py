@@ -16,14 +16,7 @@ import gzip
 import logging
 import logging.config
 
-module_fn = os.path.basename(__file__)
-module_fn = module_fn.replace('.py', '')
-
-# Setup logging
-logging_conf_fn = '../logging-conf.yaml'
-with open(logging_conf_fn, mode='r') as f:
-    logging.config.dictConfig(yaml.load(f))
-log = logging.getLogger(f'{module_fn}-orthologs')
+from bel_lang.Config import config
 
 # Import local util module
 sys.path.append("..")
@@ -99,4 +92,14 @@ def main():
 
 
 if __name__ == '__main__':
+    # Setup logging
+    global log
+    module_fn = os.path.basename(__file__)
+    module_fn = module_fn.replace('.py', '')
+
+    logging_conf_fn = f'{config["bel_resources"]["file_locations"]["root"]}/logging_conf.yml'
+    with open(logging_conf_fn, mode='r') as f:
+        logging.config.dictConfig(yaml.load(f))
+        log = logging.getLogger(f'{module_fn}-orthologs')
+
     main()
