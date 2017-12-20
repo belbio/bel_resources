@@ -21,11 +21,11 @@ import logging
 import logging.config
 
 import tools.utils.utils as utils
-from bel_lang.Config import config
+from tools.utils.Config import config
 
 # Globals
 namespace_key = 'chembl'
-namespace_def = utils.get_namespace(namespace_key)
+namespace_def = utils.get_namespace(namespace_key, config)
 ns_prefix = namespace_def['namespace']
 
 server = 'ftp.ebi.ac.uk'

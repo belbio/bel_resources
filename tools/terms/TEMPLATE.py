@@ -20,7 +20,7 @@ import logging
 import logging.config
 
 import tools.utils.utils as utils
-from bel_lang.Config import config
+from tools.utils.Config import config
 
 """
 1.  Set up globals - what files to download, any adjustments to metadata, filenames, etc
@@ -34,7 +34,7 @@ from bel_lang.Config import config
 
 # Globals ###################################################################
 namespace_key = 'REPLACEME'  # namespace key into namespace definitions file
-namespace_def = utils.get_namespace(namespace_key)
+namespace_def = utils.get_namespace(namespace_key, config)
 ns_prefix = namespace_def['namespace']
 
 # FTP options

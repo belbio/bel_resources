@@ -33,6 +33,18 @@ sp:
   template_url: http://www.uniprot.org/uniprot/<src_id>
   description: UniprotKB/Swissprot
   notes: |
+    This only includes Swissprot entries from UniProt.
+    The primary (first) accession ID is used as the canonical identifier.
+    Any additional accessions are added to the alt_ids listing.  The ID field
+    is added as an alt_id.
+
+up:
+  namespace: UP
+  src_url: http://www.uniprot.org/uniprot
+  template_url: http://www.uniprot.org/uniprot/<src_id>
+  description: UniprotKB/Swissprot
+  notes: |
+    This includes all entries from Uniprot.
     The primary (first) accession ID is used as the canonical identifier.
     Any additional accessions are added to the alt_ids listing.  The ID field
     is added as an alt_id.
@@ -86,4 +98,8 @@ do:
   template_url: http://www.ontobee.org/ontology/DOID?iri=http://purl.obolibrary.org/obo/DOID_<src_id>
   description: Disease Ontology
 
-
+zfin:
+  namespace: ZFIN
+  src_url: https://zfin.org
+  template_url: https://zfin.org/<src_id>
+  description: Zebrafish Genome database

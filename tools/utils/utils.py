@@ -16,8 +16,6 @@ import datetime
 import yaml
 from typing import Tuple, Mapping, Any
 
-
-
 import logging
 log = logging.getLogger(__name__)
 
@@ -41,23 +39,7 @@ log = logging.getLogger(__name__)
 #     s.run()
 
 
-def arango_id_to_key(_id):
-    """Remove illegal chars from potential arangodb _key (id)
-
-    Args:
-        _id (str): id to be used as arangodb _key
-
-    Returns:
-        (str): _key value with illegal chars removed
-    """
-
-    key = re.sub("[^a-zA-Z0-9\_\-\:\.\@\(\)\+\,\=\;\$\!\*\'\%]+", '_', _id)
-    if len(key) > 254:
-        log.error(f'Arango _key cannot be longer than 254 chars: Len={len(key)}  Key: {key}')
-    return key
-
-
-def get_namespace(prefix: str) -> Mapping[str, Any]:
+def get_namespace(prefix: str, config: Mapping[str, Any]) -> Mapping[str, Any]:
     """Get namespace info
 
     Args:

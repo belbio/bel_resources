@@ -24,11 +24,11 @@ import logging.config
 # TODO: should molecular function branch be tagged as entity_type: Activity?
 
 import tools.utils.utils as utils
-from bel_lang.Config import config
+from tools.utils.Config import config
 
 # Globals
 namespace_key = 'go'
-namespace_def = utils.get_namespace(namespace_key)
+namespace_def = utils.get_namespace(namespace_key, config)
 ns_prefix = namespace_def['namespace']
 
 url = 'http://purl.obolibrary.org/obo/go.obo'

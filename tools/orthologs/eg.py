@@ -16,7 +16,7 @@ import gzip
 import logging
 import logging.config
 
-from bel_lang.Config import config
+from tools.utils.Config import config
 
 # Import local util module
 sys.path.append("..")
@@ -25,7 +25,7 @@ import utils
 # Globals
 prefix = 'eg'
 ns_prefix = prefix.upper()
-namespace = utils.get_namespace(prefix)
+namespace = utils.get_namespace(prefix, config)
 
 species_namespace = utils.get_namespace('tax')
 tax_ns_prefix = species_namespace['namespace']

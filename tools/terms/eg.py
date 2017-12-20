@@ -17,11 +17,11 @@ import logging
 import logging.config
 
 import tools.utils.utils as utils
-from bel_lang.Config import config
+from tools.utils.Config import config
 
 # Globals
 namespace_key = 'eg'
-namespace_def = utils.get_namespace(namespace_key)
+namespace_def = utils.get_namespace(namespace_key, config)
 ns_prefix = namespace_def['namespace']
 
 # ftp://ftp.ncbi.nih.gov/gene/DATA/gene_history.gz

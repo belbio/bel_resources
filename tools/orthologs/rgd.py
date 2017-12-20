@@ -16,7 +16,7 @@ import gzip
 import logging
 import logging.config
 
-from bel_lang.Config import config
+from tools.utils.Config import config
 
 # Import local util module
 sys.path.append("..")
@@ -24,7 +24,7 @@ import utils
 
 # Globals
 prefix = 'rgd'
-namespace = utils.get_namespace(prefix)
+namespace = utils.get_namespace(prefix, config)
 
 orthologs_fp = f'../data/orthologs/{prefix}.json.gz'
 tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)

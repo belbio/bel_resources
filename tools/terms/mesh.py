@@ -19,11 +19,11 @@ import logging.config
 import copy
 
 import tools.utils.utils as utils
-from bel_lang.Config import config
+from tools.utils.Config import config
 
 # Globals
 namespace_key = 'mesh'
-namespace_def = utils.get_namespace(namespace_key)
+namespace_def = utils.get_namespace(namespace_key, config)
 ns_prefix = namespace_def['namespace']
 
 terms_fp = f'../data/terms/{namespace_key}.jsonl.gz'
@@ -109,19 +109,19 @@ def process_types(mesh_id, mns, sts):
 
     global chemicals_ST
     entity_types = set()
-    context_types = set()
+    annotation_types = set()
 
     if mns:  # Description records
         for mn in mns:
             if re.match('A', mn) and not re.match('A11', mn):
-                context_types.add('Anatomy')
+                annotation_types.add('Anatomy')
             if re.match('A11', mn) and not re.match('A11.284', mn):
-                context_types.add('Cell')
+                annotation_types.add('Cell')
             if re.match('A11.284', mn):
                 entity_types.add('Location')
-                context_types.add('CellStructure')
+                annotation_types.add('CellStructure')
             if re.match('C|F', mn):  # Original OpenBEL was C|F03 - Charles Hoyt suggested C|F
-                context_types.add('Disease')
+                annotation_types.add('Disease')
                 entity_types.add('Pathology')
             if re.match('G', mn) and not re.match('G01|G15|G17', mn):
                 entity_types.add('BiologicalProcess')
@@ -137,7 +137,7 @@ def process_types(mesh_id, mns, sts):
         if flag:
             entity_types.add('Abundance')
 
-    return (list(entity_types), list(context_types))
+    return (list(entity_types), list(annotation_types))
 
 
 def process_synonyms(syns):
@@ -179,10 +179,10 @@ def build_json(force: bool = False):
         metadata = get_metadata()
         fo.write("{}\n".format(json.dumps({'metadata': metadata})))
 
-        mesh_id, mns, sts, mh, desc, entity_types, context_types, syns = None, [], [], None, None, [], [], []
+        mesh_id, mns, sts, mh, desc, entity_types, annotation_types, syns = None, [], [], None, None, [], [], []
         for line in fi:
             if re.match('^\s*$', line):
-                (entity_types, context_types) = process_types(mesh_id, mns, sts)
+                (entity_types, annotation_types) = process_types(mesh_id, mns, sts)
                 syns = process_synonyms(syns)
                 term = {
                     'namespace': ns_prefix,
@@ -193,16 +193,16 @@ def build_json(force: bool = False):
                     'name': mh,
                     'description': desc,
                     'entity_types': copy.copy(entity_types),
-                    'context_types': copy.copy(context_types),
+                    'annotation_types': copy.copy(annotation_types),
                     'synonyms': copy.copy(syns),
                 }
 
                 # only save terms that have x_types
-                if entity_types or context_types:
+                if entity_types or annotation_types:
                     # Add term to JSONL
                     fo.write("{}\n".format(json.dumps({'term': term})))
 
-                mesh_id, mns, sts, mh, desc, entity_types, context_types, syns = None, [], [], None, None, [], [], []
+                mesh_id, mns, sts, mh, desc, entity_types, annotation_types, syns = None, [], [], None, None, [], [], []
                 continue
 
             match = re.match('^MH\s=\s(.*?)\s*$', line)

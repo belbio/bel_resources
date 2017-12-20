@@ -20,11 +20,11 @@ import logging
 import logging.config
 
 import tools.utils.utils as utils
-from bel_lang.Config import config
+from tools.utils.Config import config
 
 # Globals
 namespace_key = 'do'
-namespace_def = utils.get_namespace(namespace_key)
+namespace_def = utils.get_namespace(namespace_key, config)
 ns_prefix = namespace_def['namespace']
 
 url = "http://purl.obolibrary.org/obo/doid.obo"
@@ -108,7 +108,7 @@ def process_obo(force: bool = False):
                 'description': ont_term.desc,
                 'synonyms': [],
                 'children': [],
-                'annotation_type': ['Disease'],
+                'annotation_types': ['Disease'],
                 'equivalences': [],
             }
             if ont_term.name not in unique_names:

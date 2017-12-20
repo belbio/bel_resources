@@ -17,7 +17,7 @@ import logging
 import logging.config
 
 import tools.utils.utils as utils
-from bel_lang.Config import config
+from tools.utils.Config import config
 
 entity_type_conversion = {
     'A': 'Abundance',

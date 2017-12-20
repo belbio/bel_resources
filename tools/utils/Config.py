@@ -4,8 +4,7 @@
 import os
 import re
 
-from bel_lang.Config import config
-
+from bel_db.Config import config
 
 # Enhance config dictionary with file_paths
 #    following functions support this
@@ -53,7 +52,6 @@ def main():
 
     # get_version()
     # quit()
-
 
     config = get_config(config)
     import json

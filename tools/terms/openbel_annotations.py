@@ -17,7 +17,7 @@ import logging
 import logging.config
 
 import tools.utils.utils as utils
-from bel_lang.Config import config
+from tools.utils.Config import config
 
 
 def update_data_files() -> bool:
@@ -113,7 +113,7 @@ def build_json(annofiles):
 
         idx_len = len(anno_dict['Citation']['NameString'])
 
-        context_type = anno_dict['AnnotationDefinition']['Keyword'][0]
+        annotation_type = anno_dict['AnnotationDefinition']['Keyword'][0]
         for idx in range(idx_len):
 
             metadata = {}
@@ -139,7 +139,7 @@ def build_json(annofiles):
                         "id": utils.get_prefixed_id(namespace, val),
                         "label": val,
                         "name": val,
-                        "context_types": [context_type],
+                        "annotation_types": [annotation_type],
                         "alt_ids": [vid]
                     }
                     terms.append(copy.deepcopy(term))
@@ -154,6 +154,7 @@ def build_json(annofiles):
 def main():
     annofiles = update_data_files()
     build_json(annofiles)
+
 
 if __name__ == '__main__':
     # Setup logging

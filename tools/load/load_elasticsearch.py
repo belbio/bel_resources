@@ -23,21 +23,14 @@ import click
 import timy
 
 import tools.utils.utils as utils
-from bel_lang.Config import config
+from tools.utils.Config import config
+import bel_db.elasticsearch
 
 from timy.settings import (
     timy_config,
     TrackingMode
 )
 timy_config.tracking_mode = TrackingMode.LOGGING
-
-# Globals
-server = config['bel_api']['servers']['elasticsearch']
-es = Elasticsearch([server], send_get_body_as='POST')
-
-# TODO - start of using index aliases for managing updating Elasticsearch
-today_str = datetime.date.today().strftime("%Y-%m-%d")
-index_name = 'terms_' + today_str
 
 
 def collect_term_datasets() -> List[str]:
@@ -50,6 +43,8 @@ def collect_term_datasets() -> List[str]:
 
 def get_terms(term_fn: str, index_name: str) -> Iterable[Mapping[str, Any]]:
     """Generator of Term records to load into Elasticsearch"""
+
+    species_list = config['bel_resources'].get('species_list', [])
 
     with gzip.open(term_fn, 'rt') as f:
 
@@ -67,6 +62,11 @@ def get_terms(term_fn: str, index_name: str) -> Iterable[Mapping[str, Any]]:
                     # log.info(f"Yielded {counter} terms {timer.track()}")
 
                 term = json.loads(line)['term']
+
+                # Filter species if enabled in config
+                species_id = term.get('species_id', None)
+                if species_list and species_id and species_id not in species_list:
+                    continue
 
                 name = None
                 if term.get('name', None) and term.get('label', None) and term['name'] == term['label']:
@@ -108,70 +108,21 @@ def get_terms(term_fn: str, index_name: str) -> Iterable[Mapping[str, Any]]:
                 }
 
 
-def load_term_dataset(term_fn: str, index_name: str):
-    """Load term datasets using Elasticsearch bulk load
-
-    Args:
-        term_fn (str): terminology filename to load
-        index_name (str): terms index name to use (so it can be aliased to 'terms')
-    """
-    terms = (get_terms(term_fn, index_name))
-
-    chunk_size = 200
-
-    try:
-        results = elasticsearch.helpers.bulk(es, terms, chunk_size=chunk_size)
-
-        # elasticsearch.helpers.parallel_bulk(es, terms, chunk_size=chunk_size, thread_count=4)
-        if len(results[1]) > 0:
-            log.error('Bulk load errors {}'.format(results))
-    except elasticsearch.ElasticsearchException as e:
-        log.error('Indexing error: {}\n'.format(e))
-
-
-class FuncTimer():
-    """ Convenience class to time function calls
-
-    Use via the "with" keyword ::
-
-        with Functimer("Expensive Function call"):
-            foo = expensiveFunction(bar)
-
-    A timer will be displayed in the current logger as `"Starting expensive function call ..."`
-    then when the code exits the with statement, the log will mention `"Finished expensive function call in 28.42s"`
-
-    By default, all FuncTimer log messages are written at the `logging.DEBUG` level. For info-level messages, set the
-    `FuncTimer.info`  argument to `True`::
-
-        with Functimer("Expensive Function call",info=True):
-            foo = expensiveFunction(bar)
-    """
-
-    def __init__(self, funcName, info=False):
-
-        self.funcName = funcName
-        self.infoLogLevel = True
-
-    def __enter__(self):
-        log.debug("Starting {} ...".format(self.funcName))
-        self.start = time.clock()
-        return self
-
-    def __exit__(self, *args):
-        self.end = time.clock()
-        self.interval = self.end - self.start
-        log.info("{} over in {}s".format(self.funcName, self.interval).capitalize())
-
-
 @click.command()
 @click.argument('namespaces', nargs=-1)
-@click.option('--index_name', default='terms_blue', help='Use this name for index.  Default is "terms_blue"')
-@click.option('--runall/--no-runall', default=False, help="Load all namespaces")
-def main(namespaces, index_name, runall):
+@click.option('-d', '--delete/--no-delete', default=False, help='Delete existing terms index')
+@click.option('-i', '--index_name', default='terms_blue', help='Use this name for index.  Default is "terms_blue"')
+@click.option('-a', '--all/--no-all', default=False, help="Load all namespaces found in bel_resources/data/terms")
+def main(namespaces, delete, index_name, runall):
     """Load Namespaces
 
-    Load the given namespace prefixes (<prefix>.jsonl.gz) from the data/terms directory
+    Load the given namespace prefixes (<prefix>.jsonl.gz) from the bel_resources/data/terms directory
     """
+
+    if delete:
+        es = bel_db.elasticsearch.get_client(delete=True)
+    else:
+        es = bel_db.elasticsearch.get_client()
 
     files = []
     if runall:
@@ -183,20 +134,17 @@ def main(namespaces, index_name, runall):
 
     for fn in sorted(files):
         log.info(f'Loading {fn}')
-        with FuncTimer(f'load terms {fn}', info=True):
-            load_term_dataset(fn, index_name)
+        terms = get_terms(fn, index_name)
+        bel_db.elasticsearch.bulk_load_terms(es, terms, index_name)
 
 
 if __name__ == '__main__':
 
     # Setup logging
     global log
-    logging_conf_fn = config['bel_resources']['file_locations']['logging_conf_fn']
-    with open(logging_conf_fn, mode='r') as f:
-        logging.config.dictConfig(yaml.load(f))
-        log = logging.getLogger(name='load_elasticsearch')
 
-    files = collect_term_datasets()
+    logging.config.dictConfig(config['logging'])
+    log = logging.getLogger(name='load_elasticsearch')
 
     main()
 

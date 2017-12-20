@@ -33,11 +33,11 @@ import logging
 import logging.config
 
 import tools.utils.utils as utils
-from bel_lang.Config import config
+from tools.utils.Config import config
 
 # Globals
 namespace_key = 'tax'
-namespace_def = utils.get_namespace(namespace_key)
+namespace_def = utils.get_namespace(namespace_key, config)
 ns_prefix = namespace_def['namespace']
 
 server = 'ftp.ncbi.nih.gov'
@@ -137,10 +137,12 @@ def build_json(force: bool = False):
                 'taxonomy_rank': rank,
                 'name': '',
                 'label': '',
+                'species_id': f'{ns_prefix}:{src_id}',
+                'species_label': '',
                 'synonyms': [],
                 'alt_ids': [],
                 'taxonomy_names': [],
-                'context_types': [],
+                'annotation_types': [],
             }
 
             # Add preferred label as alt_id
@@ -148,7 +150,7 @@ def build_json(force: bool = False):
                 terms[src_id]['alt_ids'].append(f'{ns_prefix}:{preferred_labels[src_id]}')
 
             if rank == 'species':
-                terms[src_id]['context_types'].append('Species')
+                terms[src_id]['annotation_types'].append('Species')
 
             if embl_code:
                 terms[src_id]['embl_code'] = embl_code
@@ -177,11 +179,12 @@ def build_json(force: bool = False):
 
             if name_type == 'genbank common name':
                 terms[src_id]['label'] = preferred_labels.get(src_id, name)  # Override label if available
-
+                terms[src_id]['species_label'] = preferred_labels.get(src_id, name)  # Override label if available
             elif name_type == 'scientific name':
                 terms[src_id]['name'] = name
                 if not terms[src_id]['label']:
                     terms[src_id]['label'] = name
+                    terms[src_id]['species_label'] = name
 
                 # Add name as alternate ID if scientific names and taxonomy rank is species
                 if terms[src_id]['taxonomy_rank'] == 'species':

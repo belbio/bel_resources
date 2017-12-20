@@ -1,7 +1,9 @@
+-e git+git@github.com:belbio/bel_lang.git@22caac0b498d787857bb49b0458928a9f1377e2d#egg=bel_lang
 certifi==2017.11.5
 chardet==3.0.4
 click==6.7
 elasticsearch==6.0.0
+fastcache==1.0.2
 idna==2.6
 pronto==0.10.1
 python-arango==3.12.1
@@ -9,6 +11,7 @@ PyYAML==3.12
 requests==2.18.4
 six==1.11.0
 snakeviz==0.4.2
+TatSu==4.2.2
 timy==0.4.0
 tornado==4.5.2
 urllib3==1.22
