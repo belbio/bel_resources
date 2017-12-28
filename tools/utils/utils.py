@@ -182,66 +182,63 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
     ftp.cwd(path)
 
     # Only download file if it's newer than what is saved
-    #    depends on FTP server supporting MLSD command (RFC 3659)
+    rmod_date = "19010101"
     try:
-        dirinfo = ftp.mlsd(facts=['size', 'modify'])
-
-        for f in dirinfo:
-            if f[0] == filename:
-                rmod_date = f[1]['modify'][0:8]  # get only date portion of modification date
-                break
-        else:
-            ftp.quit()
-            return(False, 'File is missing')
+        reply = str(ftp.sendcmd('MDTM ' + filename)).split()
+        reply_code = int(reply[0])
+        if reply_code == 213:
+            rmod_date = reply[1][:8]
 
         if not force:
             if lmod_date >= rmod_date:
-                return (True, 'Remote file is not newer than local file')
+                return True, 'Remote file is not newer than local file'
 
     except Exception as e:
-        # no support for MLSD cmd
-        log.warning(f'Cannot get file mod date')
-        # log.error(f'Cannot get directory information on file modification date {e_resp}')
+        log.warning(f'Cannot get file mod date by sending MDTM command.')
         check_date = (datetime.datetime.now() - datetime.timedelta(days=days_old)).strftime("%Y%m%d")
 
         if lmod_date > check_date:
             log.warning(f"{lfile} < week old - won't retrieve, filemod date unavailable")
-            return (True, f"{lfile} < week old - won't retrieve, filemod date unavailable")
+            return True, f"{lfile} < week old - won't retrieve, filemod date unavailable"
 
-    if gzip_flag:
-        with gzip.open(lfile, mode='wb') as f:
-            try:
-                ftp.retrbinary(f'RETR {filename}', f.write)
-                ftp.quit()
-                return (True, f'Downloaded {filename}')
-            except Exception as e:
-                ftp.quit()
-                log.error(f'Could not download {filename}')
-                return(False, f'Error downloading file: {e}')
-    else:
-        with open(lfile, mode='wb') as f:
-            try:
-                ftp.retrbinary(f'RETR {filename}', f.write)
-                ftp.quit()
-                return (True, f'Downloaded {filename}')
-            except Exception as e:
-                ftp.quit()
-                log.error(f'Could not download {filename}')
-                return(False, f'Error downloading file: {e}')
+    # use gzip's open() if gzip flag is set else use the python built-in open()
+    file_open_function = gzip.open if gzip_flag else open
+
+    with file_open_function(lfile, mode='wb') as f:
+        try:
+            ftp.retrbinary(f'RETR {filename}', f.write)
+            ftp.quit()
+            return True, f'Downloaded {filename}'
+        except Exception as e:
+            ftp.quit()
+            log.error(f'Could not download {filename}')
+            return False, f'Error downloading file: {e}'
 
 
 def main():
 
     res = file_newer('./data/terms/hgnc.json', './downloads/hgnc_complete_set.json')
-    print(res)
-    quit()
+    # print(res)
+
     server = 'ftp.ncbi.nih.gov'
     rfile = '/pub/taxonomy/taxdump.tar.gz'
     lfile = './downloads/taxdump.tar.gz'
+
+    # server = 'ftp.ebi.ac.uk'
+    # rfile = '/pub/databases/chembl/ChEMBLdb/latest/chembl_23_sqlite.tar.gz'
+    # lfile = './downloads/chembl_23_sqlite.tar.gz'
+    #
+    # server = 'ftp.ebi.ac.uk'
+    # rfile = '/pub/databases/chebi/ontology/chebi.obo.gz'
+    # lfile = './downloads/chebi.obo.gz'
+    #
+    # server = 'ftp.uniprot.org'
+    # rfile = '/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz'
+    # lfile = './downloads/uniprot_sprot.dat.gz'
+
     result = get_ftp_file(server, rfile, lfile, force=True)
     print(result)
 
 
 if __name__ == '__main__':
     main()
-
