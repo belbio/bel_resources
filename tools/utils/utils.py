@@ -186,15 +186,15 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
     try:
         reply = str(ftp.sendcmd('MDTM ' + filename)).split()
         reply_code = int(reply[0])
-        if reply_code == 213:
-            rmod_date = reply[1][:8]
+        if reply_code == 213:  # 213 code denotes a successful usage of MDTM, and is followed by the timestamp
+            rmod_date = reply[1][:8]  # we only need the first 8 digits of timestamp: YYYYMMDD - discard HHMMSS
 
         if not force:
             if lmod_date >= rmod_date:
                 return True, 'Remote file is not newer than local file'
 
     except Exception as e:
-        log.warning(f'Cannot get file mod date by sending MDTM command.')
+        log.warning(f'{e}: Cannot get file mod date by sending MDTM command.')
         check_date = (datetime.datetime.now() - datetime.timedelta(days=days_old)).strftime("%Y%m%d")
 
         if lmod_date > check_date:
@@ -206,13 +206,16 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
 
     with file_open_function(lfile, mode='wb') as f:
         try:
+            print(f'Downloading {filename}...')
             ftp.retrbinary(f'RETR {filename}', f.write)
             ftp.quit()
-            return True, f'Downloaded {filename}'
+            msg = f'Downloaded {filename}'
+            return True, msg
         except Exception as e:
             ftp.quit()
-            log.error(f'Could not download {filename}')
-            return False, f'Error downloading file: {e}'
+            error = f'Could not download {filename}: {e}'
+            log.error(error)
+            return False, error
 
 
 def main():
