@@ -110,30 +110,44 @@ def build_json(force: bool = False):
         for line in fi:
             if re.match('ZDB-GENE-', line):
                 (src_id, name, symbol, syn, *extra) = line.split('\t')
-                print('Syn', syn)
+                # print('Syn', syn)
                 if src_id in terms:
                     terms[src_id]['synonyms'].append(syn)
                 else:
                     terms[src_id] = {'name': name, 'symbol': symbol, 'synonyms': [syn]}
 
     with gzip.open(transcripts_fp, 'rt') as fi:
+        transcript_types = {}
         for line in fi:
             (tscript_id, so_id, name, gene_id, clone_id, tscript_type, status, *extra) = line.split('\t')
             if 'withdrawn' in status.lower() or 'artifact' in status.lower():
                 continue
-            if tscript_type in ['lincRNA', 'ncRNA', 'scRNA', 'snRNA', 'snoRNA']:
-                entity_types = ['Gene', 'RNA']
-            elif tscript_type == 'mRNA':
-                entity_types = ['Gene', 'RNA', 'Protein']
-            elif tscript_type == 'miRNA':
-                entity_types = ['Gene', 'Micro_RNA']
+            if gene_id in transcript_types:
+                transcript_types[gene_id][tscript_type] = 1
             else:
-                entity_types = []
+                transcript_types[gene_id] = {tscript_type: 1}
+
+        for gene_id in transcript_types:
+            types = transcript_types[gene_id].keys()
+
+            entity_types = []
+            for type_ in types:
+                if type_ in ['lincRNA', 'ncRNA', 'scRNA', 'snRNA', 'snoRNA']:
+                    entity_types.extend(['Gene', 'RNA'])
+                if type_ in ['mRNA']:
+                    entity_types.extend(['Gene', 'RNA', 'Protein'])
+                if type_ in ['miRNA']:
+                    entity_types.extend(['Gene', 'Micro_RNA'])
+
+            entity_types = list(set(entity_types))
+
+            if gene_id == 'ZDB-GENE-030115-1':
+                print('Entity types', entity_types, 'Types', types)
 
             if gene_id in terms:
-                terms[gene_id]['entity_types'] = entity_types
+                terms[gene_id]['entity_types'] = list(entity_types)
             else:
-                terms[gene_id] = {'name': name, 'entity_types': entity_types}
+                terms[gene_id] = {'name': name, 'entity_types': list(entity_types)}
 
     with gzip.open(genes_fp, 'rt') as fi:
         for line in fi:
@@ -143,7 +157,7 @@ def build_json(force: bool = False):
                 if terms[src_id].get('symbol', None) and symbol:
                     terms[src_id]['symbol'] = symbol
             else:
-                log.info(f'No term record for ZFIN {src_id} to add equivalences to')
+                log.debug(f'No term record for ZFIN {src_id} to add equivalences to')
                 continue
 
     with gzip.open(terms_fp, 'wt') as fo:

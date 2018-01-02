@@ -136,13 +136,15 @@ def process_obo(force: bool = False):
             else:
                 log.error(f'Duplicate name in GO: {ont_term.name}')
 
-            namespace = ont_term.other['namespace']
+            subtree = ont_term.other['namespace']
             if 'entity_type' in ont_term.other:
                 term['entity_types'].append(ont_term.other['entity_type'])
-            elif 'biological_process' in namespace:
+            elif 'biological_process' in subtree:
                 term['entity_types'].append('BiologicalProcess')
-            elif 'cellular_component' in namespace:
+            elif 'cellular_component' in subtree:
                 term['entity_types'].append('Location')
+            elif 'molecular_function' in subtree:
+                term['entity_types'].append('Activity')
 
             for syn in ont_term.synonyms:
                 term['synonyms'].append(syn.desc)
