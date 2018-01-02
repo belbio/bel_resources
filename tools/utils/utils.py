@@ -15,6 +15,8 @@ import shutil
 import datetime
 import yaml
 from typing import Tuple, Mapping, Any
+import requests
+from dateutil import parser
 
 import logging
 log = logging.getLogger(__name__)
@@ -115,7 +117,7 @@ def file_newer(check_file: str, base_file: str) -> bool:
 
 
 def get_web_file(url: str, lfile: str, days_old: int = 7, gzip_flag: bool = False, force: bool = False) -> Tuple[bool, str]:
-    """ Get Web file only if
+    """ Get Web file only if last modified header is more than given days_old or if local file older than remote file
 
     Args:
         url (str): file url
@@ -128,29 +130,53 @@ def get_web_file(url: str, lfile: str, days_old: int = 7, gzip_flag: bool = Fals
         (boolean, str): tuple with success for get and a message with result information
     """
 
-    lmod_date = "19000101"
-    if os.path.exists(lfile) and not force:
-        modtime_ts = os.path.getmtime(lfile)
-        lmod_date = timestamp_to_date(modtime_ts)
+    need_download = False
+    rmod_date = None
+    lmod_date = None
 
-        check_date = (datetime.datetime.now() - datetime.timedelta(days=days_old)).strftime("%Y%m%d")
+    if not os.path.exists(lfile) or force:  # local file doesn't exist or force is set - download needed
+        need_download = True
+    else:  # local file exists AND not forced, so check the remote counterpart for their last modified time and compare
+        try:
+            r = requests.get(url)
+            last_modified = r.headers['Last-Modified']
+            rmod_date_parsed = parser.parse(last_modified)
+            rmod_date_local = rmod_date_parsed.replace(tzinfo=datetime.timezone.utc).astimezone(tz=None)
+            rmod_date = rmod_date_local.strftime('%Y%m%d')
+        except requests.ConnectionError:
+            print('Cannot connect to the given URL.')
+        except KeyError:
+            print('The request does not have a last modified header.')
+        finally:
+            local_file_mtime_ts = os.path.getmtime(lfile)
+            lmod_date = timestamp_to_date(local_file_mtime_ts)
 
-        if lmod_date > check_date:
-            log.warning(f"{lfile} < week old - won't retrieve, filemod date unavailable")
-            return (False, f"{lfile} < week old - won't retrieve, filemod date unavailable")
+    if not need_download:  # still not sure whether to download or not - need to check/compare rmod date and lmod date
+        if rmod_date is None:  # if the remote file modified date cannot be found, compare with the days_old variable
+            check_date = (datetime.datetime.now() - datetime.timedelta(days=days_old)).strftime("%Y%m%d")
+            if lmod_date > check_date:
+                msg = f'{lfile} < {days_old} days old; will not re-download (remote file mtime unavailable).'
+                log.warning(msg)
+                return False, msg
+            else:
+                need_download = True
+        if rmod_date > lmod_date:
+            need_download = True
 
-    # Download the file from `url` and save it locally under `file_name`:
-    if gzip_flag:
-        with urllib.request.urlopen(url) as response, gzip.open(lfile, 'wb') as out_file:
-            shutil.copyfileobj(response, out_file)
-            return True, response
+    if need_download:
+        # use gzip's open() if gzip flag is set else use the python built-in open()
+        file_open_function = gzip.open if gzip_flag else open
+        download_request = requests.get(url)
+        html_data = download_request.content
+        with file_open_function(lfile, mode='wb') as f:
+            f.write(html_data)
 
+        msg = f'Remote file downloaded as {lfile}.'
+        return True, msg
     else:
-        with urllib.request.urlopen(url).geturl() as response, open(lfile, 'wb') as out_file:
-            shutil.copyfileobj(response, out_file)
-            return True, response.status
-
-    return False, 'Could not download file'
+        msg = f'No download needed; remote file is not newer than local file {lfile}.'
+        log.warning(msg)
+        return False, msg
 
 
 def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_flag: bool = False, force: bool = False) -> Tuple[bool, str]:
@@ -169,7 +195,6 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
     """
 
     path = os.path.dirname(rfile)
-
     filename = os.path.basename(rfile)
 
     lmod_date = "19000101"
@@ -250,8 +275,13 @@ def get_newest_version_filename(regex: str, server_host: str, server_path: str, 
 
 def main():
 
-    res = file_newer('./data/terms/hgnc.json', './downloads/hgnc_complete_set.json')
-    print(res)
+    # res = file_newer('./data/terms/hgnc.json', './downloads/hgnc_complete_set.json')
+    # print(res)
+
+    test_url = 'https://stackoverflow.com/questions/19979518/what-is-pythons-heapq-module'
+
+    r = get_web_file(test_url, 'test2.html', 3)
+    print(r)
 
     # server = 'ftp.ncbi.nih.gov'
     # rfile = '/pub/taxonomy/taxdump.tar.gz'
