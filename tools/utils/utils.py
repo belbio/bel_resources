@@ -144,8 +144,10 @@ def get_web_file(url: str, lfile: str, days_old: int = 7, gzip_flag: bool = Fals
             rmod_date_local = rmod_date_parsed.replace(tzinfo=datetime.timezone.utc).astimezone(tz=None)
             rmod_date = rmod_date_local.strftime('%Y%m%d')
         except requests.ConnectionError:
+            log.warning('Cannot connect to the given URL.')
             print('Cannot connect to the given URL.')
         except KeyError:
+            log.warning('The request does not have a last modified header.')
             print('The request does not have a last modified header.')
         finally:
             local_file_mtime_ts = os.path.getmtime(lfile)
@@ -164,14 +166,14 @@ def get_web_file(url: str, lfile: str, days_old: int = 7, gzip_flag: bool = Fals
             need_download = True
 
     if need_download:
-        # use gzip's open() if gzip flag is set else use the python built-in open()
-        file_open_function = gzip.open if gzip_flag else open
-        download_request = requests.get(url)
-        html_data = download_request.content
-        with file_open_function(lfile, mode='wb') as f:
-            f.write(html_data)
 
-        msg = f'Remote file downloaded as {lfile}.'
+        file_open_fn = gzip.open if gzip_flag else open
+        file_name = f'{lfile}.gz' if gzip_flag else lfile
+
+        with urllib.request.urlopen(url) as response, file_open_fn(file_name, 'wb') as out_file:
+            shutil.copyfileobj(response, out_file)
+
+        msg = f'Remote file downloaded as {file_name}.'
         return True, msg
     else:
         msg = f'No download needed; remote file is not newer than local file {lfile}.'
@@ -216,7 +218,7 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
 
         if not force:
             if lmod_date >= rmod_date:
-                return True, 'Remote file is not newer than local file'
+                return False, 'Remote file is not newer than local file'
 
     except Exception as e:
         log.warning(f'{e}: Cannot get file mod date by sending MDTM command.')
@@ -224,12 +226,13 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
 
         if lmod_date > check_date:
             log.warning(f"{lfile} < week old - won't retrieve, filemod date unavailable")
-            return True, f"{lfile} < week old - won't retrieve, filemod date unavailable"
+            return False, f"{lfile} < week old - won't retrieve, filemod date unavailable"
 
     # use gzip's open() if gzip flag is set else use the python built-in open()
     file_open_function = gzip.open if gzip_flag else open
+    file_name = f'{lfile}.gz' if gzip_flag else lfile
 
-    with file_open_function(lfile, mode='wb') as f:
+    with file_open_function(file_name, mode='wb') as f:
         try:
             print(f'Downloading {filename}...')
             ftp.retrbinary(f'RETR {filename}', f.write)
@@ -279,15 +282,14 @@ def main():
     # print(res)
 
     test_url = 'https://stackoverflow.com/questions/19979518/what-is-pythons-heapq-module'
-
-    r = get_web_file(test_url, 'test2.html', 3)
+    r = get_web_file(test_url, './downloads/test2.html', gzip_flag=True)
     print(r)
 
     # server = 'ftp.ncbi.nih.gov'
     # rfile = '/pub/taxonomy/taxdump.tar.gz'
     # lfile = './downloads/taxdump.tar.gz'
     #
-    # result = get_ftp_file(server, rfile, lfile, force=True)
+    # result = get_ftp_file(server, rfile, lfile)
     # print(result)
 
 
