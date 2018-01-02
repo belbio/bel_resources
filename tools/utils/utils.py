@@ -218,8 +218,18 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
             return False, error
 
 
-def get_newest_version_filename(regex, server_host, server_path, group_num):
+def get_newest_version_filename(regex: str, server_host: str, server_path: str, group_num: int) -> str:
+    """Get the name of the first file matching the regex string at the specified FTP server directory
 
+        Args:
+            regex (str): regex string to match
+            server_host (str): ftp server name
+            server_path (str): remote file path
+            group_num (int): regex group to match and return
+
+        Returns:
+            str: string that matches the group specified in the regex; could be version number or any other info wanted
+        """
     ftp = ftplib.FTP(host=server_host)
     ftp.login()
     ftp.cwd(server_path)
@@ -230,8 +240,8 @@ def get_newest_version_filename(regex, server_host, server_path, group_num):
         reg_match = re.match(regex, f)
         if reg_match:
             try:
-                version = reg_match.group(group_num)
-                return version
+                grouped_string = reg_match.group(group_num)
+                return grouped_string
             except Exception as e:
                 continue
 
