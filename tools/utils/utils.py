@@ -218,29 +218,37 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
             return False, error
 
 
+def get_newest_version_filename(regex, server_host, server_path, group_num):
+
+    ftp = ftplib.FTP(host=server_host)
+    ftp.login()
+    ftp.cwd(server_path)
+
+    files = ftp.nlst()
+
+    for f in files:  # for each file, see if regex matches. if matches, return this file.
+        reg_match = re.match(regex, f)
+        if reg_match:
+            try:
+                version = reg_match.group(group_num)
+                return version
+            except Exception as e:
+                continue
+
+    return ''
+
+
 def main():
 
     res = file_newer('./data/terms/hgnc.json', './downloads/hgnc_complete_set.json')
-    # print(res)
+    print(res)
 
-    server = 'ftp.ncbi.nih.gov'
-    rfile = '/pub/taxonomy/taxdump.tar.gz'
-    lfile = './downloads/taxdump.tar.gz'
-
-    # server = 'ftp.ebi.ac.uk'
-    # rfile = '/pub/databases/chembl/ChEMBLdb/latest/chembl_23_sqlite.tar.gz'
-    # lfile = './downloads/chembl_23_sqlite.tar.gz'
+    # server = 'ftp.ncbi.nih.gov'
+    # rfile = '/pub/taxonomy/taxdump.tar.gz'
+    # lfile = './downloads/taxdump.tar.gz'
     #
-    # server = 'ftp.ebi.ac.uk'
-    # rfile = '/pub/databases/chebi/ontology/chebi.obo.gz'
-    # lfile = './downloads/chebi.obo.gz'
-    #
-    # server = 'ftp.uniprot.org'
-    # rfile = '/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz'
-    # lfile = './downloads/uniprot_sprot.dat.gz'
-
-    result = get_ftp_file(server, rfile, lfile, force=True)
-    print(result)
+    # result = get_ftp_file(server, rfile, lfile, force=True)
+    # print(result)
 
 
 if __name__ == '__main__':
