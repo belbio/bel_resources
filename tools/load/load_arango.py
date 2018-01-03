@@ -17,7 +17,7 @@ import logging.config
 import timy
 
 from tools.utils.Config import config
-import bel_db.arangodb as arangodb
+import bel.db.arangodb as arangodb
 
 db_name = 'bel'
 ortholog_node_coll_name = 'ortholog_nodes'

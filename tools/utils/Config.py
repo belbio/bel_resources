@@ -4,7 +4,8 @@
 import os
 import re
 
-from bel_db.Config import config
+from bel.Config import config
+
 
 # Enhance config dictionary with file_paths
 #    following functions support this
