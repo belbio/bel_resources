@@ -29,7 +29,10 @@ namespace_def = utils.get_namespace(namespace_key, config)
 ns_prefix = namespace_def['namespace']
 
 server = 'ftp.ebi.ac.uk'
-source_data_fp = '/pub/databases/chembl/ChEMBLdb/latest/chembl_23_sqlite.tar.gz'
+filename_regex = r'chembl(.*?)sqlite\.tar\.gz'
+server_directory = '/pub/databases/chembl/ChEMBLdb/latest/'
+latest_source_version = utils.get_newest_version_filename(filename_regex, server, server_directory, 1)
+source_data_fp = f'/pub/databases/chembl/ChEMBLdb/latest/chembl{latest_source_version}sqlite.tar.gz'
 
 # Local data filepath setup
 basename = os.path.basename(source_data_fp)
@@ -65,8 +68,8 @@ def update_data_files() -> bool:
         bool: files updated = True, False if not
     """
 
-    # TODO fix the update - hardcoded to chembl_23
     # update_cycle_days = config['bel_resources']['update_cycle_days']
+
     result = utils.get_ftp_file(server, source_data_fp, local_data_fp, days_old=60)
 
     changed = False
@@ -85,7 +88,8 @@ def pref_name_dupes():
         from
             molecule_dictionary
     """
-    db_filename = f'{config["bel_resources"]["file_locations"]["downloads"]}/chembl_23/chembl_23_sqlite/chembl_23.db'
+    db_filename = f'{config["bel_resources"]["file_locations"]["downloads"]}/' \
+                  f'chembl{latest_source_version}/chembl{latest_source_version}sqlite/chembl{latest_source_version}.db'
     conn = sqlite3.connect(db_filename)
     conn.row_factory = sqlite3.Row
 
@@ -107,7 +111,8 @@ def pref_name_dupes():
 def query_db() -> Iterable[Mapping[str, Any]]:
     """Generator to run chembl term queries using sqlite chembl db"""
     log.error('This script requires MANUAL interaction to get latest chembl and untar it.')
-    db_filename = f'{config["bel_resources"]["file_locations"]["downloads"]}/chembl_23/chembl_23_sqlite/chembl_23.db'
+    db_filename = f'{config["bel_resources"]["file_locations"]["downloads"]}/' \
+                  f'chembl{latest_source_version}/chembl{latest_source_version}sqlite/chembl{latest_source_version}.db'
     conn = sqlite3.connect(db_filename)
     conn.row_factory = sqlite3.Row
 
@@ -234,4 +239,3 @@ if __name__ == '__main__':
         logging.config.dictConfig(yaml.load(f))
         log = logging.getLogger(f'{module_fn}-terms')
     main()
-

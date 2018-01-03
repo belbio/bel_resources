@@ -15,6 +15,8 @@ import shutil
 import datetime
 import yaml
 from typing import Tuple, Mapping, Any
+import requests
+from dateutil import parser
 
 import logging
 log = logging.getLogger(__name__)
@@ -115,7 +117,7 @@ def file_newer(check_file: str, base_file: str) -> bool:
 
 
 def get_web_file(url: str, lfile: str, days_old: int = 7, gzip_flag: bool = False, force: bool = False) -> Tuple[bool, str]:
-    """ Get Web file only if
+    """ Get Web file only if last modified header is more than given days_old or if local file older than remote file
 
     Args:
         url (str): file url
@@ -128,29 +130,55 @@ def get_web_file(url: str, lfile: str, days_old: int = 7, gzip_flag: bool = Fals
         (boolean, str): tuple with success for get and a message with result information
     """
 
-    lmod_date = "19000101"
-    if os.path.exists(lfile) and not force:
-        modtime_ts = os.path.getmtime(lfile)
-        lmod_date = timestamp_to_date(modtime_ts)
+    need_download = False
+    rmod_date = None
+    lmod_date = None
 
-        check_date = (datetime.datetime.now() - datetime.timedelta(days=days_old)).strftime("%Y%m%d")
+    if not os.path.exists(lfile) or force:  # local file doesn't exist or force is set - download needed
+        need_download = True
+    else:  # local file exists AND not forced, so check the remote counterpart for their last modified time and compare
+        try:
+            r = requests.get(url)
+            last_modified = r.headers['Last-Modified']
+            rmod_date_parsed = parser.parse(last_modified)
+            rmod_date_local = rmod_date_parsed.replace(tzinfo=datetime.timezone.utc).astimezone(tz=None)
+            rmod_date = rmod_date_local.strftime('%Y%m%d')
+        except requests.ConnectionError:
+            log.warning('Cannot connect to the given URL.')
+            print('Cannot connect to the given URL.')
+        except KeyError:
+            log.warning('The request does not have a last modified header.')
+            print('The request does not have a last modified header.')
+        finally:
+            local_file_mtime_ts = os.path.getmtime(lfile)
+            lmod_date = timestamp_to_date(local_file_mtime_ts)
 
-        if lmod_date > check_date:
-            log.warning(f"{lfile} < week old - won't retrieve, filemod date unavailable")
-            return (False, f"{lfile} < week old - won't retrieve, filemod date unavailable")
+    if not need_download:  # still not sure whether to download or not - need to check/compare rmod date and lmod date
+        if rmod_date is None:  # if the remote file modified date cannot be found, compare with the days_old variable
+            check_date = (datetime.datetime.now() - datetime.timedelta(days=days_old)).strftime("%Y%m%d")
+            if lmod_date > check_date:
+                msg = f'{lfile} < {days_old} days old; will not re-download (remote file mtime unavailable).'
+                log.warning(msg)
+                return False, msg
+            else:
+                need_download = True
+        if rmod_date > lmod_date:
+            need_download = True
 
-    # Download the file from `url` and save it locally under `file_name`:
-    if gzip_flag:
-        with urllib.request.urlopen(url) as response, gzip.open(lfile, 'wb') as out_file:
+    if need_download:
+
+        file_open_fn = gzip.open if gzip_flag else open
+        file_name = f'{lfile}.gz' if gzip_flag else lfile
+
+        with urllib.request.urlopen(url) as response, file_open_fn(file_name, 'wb') as out_file:
             shutil.copyfileobj(response, out_file)
-            return True, response
 
+        msg = f'Remote file downloaded as {file_name}.'
+        return True, msg
     else:
-        with urllib.request.urlopen(url).geturl() as response, open(lfile, 'wb') as out_file:
-            shutil.copyfileobj(response, out_file)
-            return True, response.status
-
-    return False, 'Could not download file'
+        msg = f'No download needed; remote file is not newer than local file {lfile}.'
+        log.warning(msg)
+        return False, msg
 
 
 def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_flag: bool = False, force: bool = False) -> Tuple[bool, str]:
@@ -169,7 +197,6 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
     """
 
     path = os.path.dirname(rfile)
-
     filename = os.path.basename(rfile)
 
     lmod_date = "19000101"
@@ -191,7 +218,7 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
 
         if not force:
             if lmod_date >= rmod_date:
-                return True, 'Remote file is not newer than local file'
+                return False, 'Remote file is not newer than local file'
 
     except Exception as e:
         log.warning(f'{e}: Cannot get file mod date by sending MDTM command.')
@@ -199,12 +226,13 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
 
         if lmod_date > check_date:
             log.warning(f"{lfile} < week old - won't retrieve, filemod date unavailable")
-            return True, f"{lfile} < week old - won't retrieve, filemod date unavailable"
+            return False, f"{lfile} < week old - won't retrieve, filemod date unavailable"
 
     # use gzip's open() if gzip flag is set else use the python built-in open()
     file_open_function = gzip.open if gzip_flag else open
+    file_name = f'{lfile}.gz' if gzip_flag else lfile
 
-    with file_open_function(lfile, mode='wb') as f:
+    with file_open_function(file_name, mode='wb') as f:
         try:
             print(f'Downloading {filename}...')
             ftp.retrbinary(f'RETR {filename}', f.write)
@@ -218,29 +246,51 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
             return False, error
 
 
+def get_newest_version_filename(regex: str, server_host: str, server_path: str, group_num: int) -> str:
+    """Get the name of the first file matching the regex string at the specified FTP server directory
+
+        Args:
+            regex (str): regex string to match
+            server_host (str): ftp server name
+            server_path (str): remote file path
+            group_num (int): regex group to match and return
+
+        Returns:
+            str: string that matches the group specified in the regex; could be version number or any other info wanted
+        """
+    ftp = ftplib.FTP(host=server_host)
+    ftp.login()
+    ftp.cwd(server_path)
+
+    files = ftp.nlst()
+
+    for f in files:  # for each file, see if regex matches. if matches, return this file.
+        reg_match = re.match(regex, f)
+        if reg_match:
+            try:
+                grouped_string = reg_match.group(group_num)
+                return grouped_string
+            except Exception as e:
+                continue
+
+    return ''
+
+
 def main():
 
-    res = file_newer('./data/terms/hgnc.json', './downloads/hgnc_complete_set.json')
+    # res = file_newer('./data/terms/hgnc.json', './downloads/hgnc_complete_set.json')
     # print(res)
 
-    server = 'ftp.ncbi.nih.gov'
-    rfile = '/pub/taxonomy/taxdump.tar.gz'
-    lfile = './downloads/taxdump.tar.gz'
+    test_url = 'https://stackoverflow.com/questions/19979518/what-is-pythons-heapq-module'
+    r = get_web_file(test_url, './downloads/test2.html', gzip_flag=True)
+    print(r)
 
-    # server = 'ftp.ebi.ac.uk'
-    # rfile = '/pub/databases/chembl/ChEMBLdb/latest/chembl_23_sqlite.tar.gz'
-    # lfile = './downloads/chembl_23_sqlite.tar.gz'
+    # server = 'ftp.ncbi.nih.gov'
+    # rfile = '/pub/taxonomy/taxdump.tar.gz'
+    # lfile = './downloads/taxdump.tar.gz'
     #
-    # server = 'ftp.ebi.ac.uk'
-    # rfile = '/pub/databases/chebi/ontology/chebi.obo.gz'
-    # lfile = './downloads/chebi.obo.gz'
-    #
-    # server = 'ftp.uniprot.org'
-    # rfile = '/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz'
-    # lfile = './downloads/uniprot_sprot.dat.gz'
-
-    result = get_ftp_file(server, rfile, lfile, force=True)
-    print(result)
+    # result = get_ftp_file(server, rfile, lfile)
+    # print(result)
 
 
 if __name__ == '__main__':
