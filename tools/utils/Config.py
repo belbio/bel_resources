@@ -6,6 +6,9 @@ import re
 
 from bel.Config import config
 
+import logging
+log = logging.getLogger(__name__)
+
 
 # Enhance config dictionary with file_paths
 #    following functions support this

@@ -6,9 +6,9 @@ Usage:  hgnc.py
 
 """
 
-import sys
 import tempfile
 import os
+import re
 import json
 import yaml
 import datetime
@@ -16,24 +16,22 @@ import gzip
 import logging
 import logging.config
 
+import tools.utils.utils as utils
 from tools.utils.Config import config
-
-# Import local util module
-sys.path.append("..")
-import utils
 
 # Globals
 prefix = 'hgnc'
 ns_prefix = prefix.upper()
 namespace = utils.get_namespace(prefix, config)
 
-orthologs_fp = f'../data/orthologs/{prefix}.jsonl.gz'
+data_fp = config["bel_resources"]["file_locations"]["data"]
+orthologs_fp = f'{data_fp}/orthologs/{prefix}.jsonl.gz'
+
 tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
 dt = datetime.datetime.now().replace(microsecond=0).isoformat()
 
 server = 'ftp.ebi.ac.uk'
 remote_file = '/pub/databases/genenames/new/json/hgnc_complete_set.json'
-download_fp = '../downloads/hgnc_complete_set.json.gz'
 
 orthologs_metadata = {
     "source": namespace['namespace'],
@@ -41,6 +39,14 @@ orthologs_metadata = {
     "description": namespace['description'] + ' orthologs',
     "version": dt,
 }
+
+# Local data filepath setup
+basename = os.path.basename(remote_file)
+
+if not re.search('.gz$', basename):  # we basically gzip everything retrieved that isn't already gzipped
+    basename = f'{basename}.gz'
+
+local_data_fp = f'{config["bel_resources"]["file_locations"]["downloads"]}/{basename}'
 
 
 def update_data_files() -> bool:
@@ -53,7 +59,7 @@ def update_data_files() -> bool:
     """
 
     # Update data file
-    result = utils.get_ftp_file(server, remote_file, download_fp, gzip_flag=True)
+    result = utils.get_ftp_file(server, remote_file, local_data_fp)
 
     changed = False
     if 'Downloaded' in result[1]:
@@ -73,11 +79,11 @@ def build_json(force: bool = False):
 
     # Don't rebuild file if it's newer than downloaded source file
     if not force:
-        if utils.file_newer(orthologs_fp, download_fp):
-            log.warning('Will not rebuild data file as it is newer than downloaded source file')
+        if utils.file_newer(orthologs_fp, local_data_fp):
+            log.info('Will not rebuild data file as it is newer than downloaded source file')
             return False
 
-    with gzip.open(download_fp, 'rt') as fi, gzip.open(orthologs_fp, 'wt') as fo:
+    with gzip.open(local_data_fp, 'rt') as fi, gzip.open(orthologs_fp, 'wt') as fo:
 
         fo.write("{}\n".format(json.dumps({'metadata': orthologs_metadata})))
 
@@ -125,9 +131,7 @@ if __name__ == '__main__':
     module_fn = os.path.basename(__file__)
     module_fn = module_fn.replace('.py', '')
 
-    logging_conf_fn = f'{config["bel_resources"]["file_locations"]["root"]}/logging_conf.yml'
-    with open(logging_conf_fn, mode='r') as f:
-        logging.config.dictConfig(yaml.load(f))
-        log = logging.getLogger(f'{module_fn}-orthologs')
+    logging.config.dictConfig(config['logging'])
+    log = logging.getLogger(f'{module_fn}-orthologs')
 
     main()

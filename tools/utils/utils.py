@@ -116,14 +116,13 @@ def file_newer(check_file: str, base_file: str) -> bool:
     return cf_modtime_ts > bf_modtime_ts
 
 
-def get_web_file(url: str, lfile: str, days_old: int = 7, gzip_flag: bool = False, force: bool = False) -> Tuple[bool, str]:
+def get_web_file(url: str, lfile: str, days_old: int = 7, force: bool = False) -> Tuple[bool, str]:
     """ Get Web file only if last modified header is more than given days_old or if local file older than remote file
 
     Args:
         url (str): file url
         lfile (str): local file path
         days_old (int): how many days old local file is before re-downloading
-        gzip_flag (bool): gzip downloaded file, default False
         force (boolean): whether to force downloading file even if it's not newer than already downloaded file
 
     Returns:
@@ -145,10 +144,8 @@ def get_web_file(url: str, lfile: str, days_old: int = 7, gzip_flag: bool = Fals
             rmod_date = rmod_date_local.strftime('%Y%m%d')
         except requests.ConnectionError:
             log.warning('Cannot connect to the given URL.')
-            print('Cannot connect to the given URL.')
         except KeyError:
-            log.warning('The request does not have a last modified header.')
-            print('The request does not have a last modified header.')
+            log.info('The request does not have a last modified header.')
         finally:
             local_file_mtime_ts = os.path.getmtime(lfile)
             lmod_date = timestamp_to_date(local_file_mtime_ts)
@@ -158,30 +155,32 @@ def get_web_file(url: str, lfile: str, days_old: int = 7, gzip_flag: bool = Fals
             check_date = (datetime.datetime.now() - datetime.timedelta(days=days_old)).strftime("%Y%m%d")
             if lmod_date > check_date:
                 msg = f'{lfile} < {days_old} days old; will not re-download (remote file mtime unavailable).'
-                log.warning(msg)
+                log.info(msg)
                 return False, msg
             else:
                 need_download = True
-        if rmod_date > lmod_date:
+        elif rmod_date > lmod_date:
             need_download = True
 
     if need_download:
 
-        file_open_fn = gzip.open if gzip_flag else open
-        file_name = f'{lfile}.gz' if gzip_flag else lfile
+        if not re.search('\.gz$', url):
+            file_open_fn = gzip.open
+        else:
+            file_open_fn = open
 
-        with urllib.request.urlopen(url) as response, file_open_fn(file_name, 'wb') as out_file:
+        with urllib.request.urlopen(url) as response, file_open_fn(lfile, 'wb') as out_file:
             shutil.copyfileobj(response, out_file)
 
-        msg = f'Remote file downloaded as {file_name}.'
+        msg = f'Remote file downloaded as {lfile}.'
         return True, msg
     else:
         msg = f'No download needed; remote file is not newer than local file {lfile}.'
-        log.warning(msg)
+        log.info(msg)
         return False, msg
 
 
-def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_flag: bool = False, force: bool = False) -> Tuple[bool, str]:
+def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, force: bool = False) -> Tuple[bool, str]:
     """Get FTP file only if newer than already downloaded file
 
     Args:
@@ -189,7 +188,6 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
         rfile (str): remote file path
         lfile (str): local file path
         days_old (int): how many days old local file is before re-downloading - only used if can't determine remote file mod date
-        gzip_flag (bool): gzip downloaded file, default False
         force (bool): whether to force downloading file even if it's not newer than already downloaded file
 
     Returns:
@@ -221,20 +219,20 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, gzip_fl
                 return False, 'Remote file is not newer than local file'
 
     except Exception as e:
-        log.warning(f'{e}: Cannot get file mod date by sending MDTM command.')
+        log.info(f'{e}: Cannot get file mod date by sending MDTM command.')
         check_date = (datetime.datetime.now() - datetime.timedelta(days=days_old)).strftime("%Y%m%d")
 
         if lmod_date > check_date:
-            log.warning(f"{lfile} < week old - won't retrieve, filemod date unavailable")
+            log.info(f"{lfile} < week old - won't retrieve, filemod date unavailable")
             return False, f"{lfile} < week old - won't retrieve, filemod date unavailable"
 
-    # use gzip's open() if gzip flag is set else use the python built-in open()
-    file_open_function = gzip.open if gzip_flag else open
-    file_name = f'{lfile}.gz' if gzip_flag else lfile
+    if not re.search('\.gz$', filename):
+        file_open_fn = gzip.open
+    else:
+        file_open_fn = open
 
-    with file_open_function(file_name, mode='wb') as f:
+    with file_open_fn(lfile, mode='wb') as f:
         try:
-            print(f'Downloading {filename}...')
             ftp.retrbinary(f'RETR {filename}', f.write)
             ftp.quit()
             msg = f'Downloaded {filename}'
@@ -282,7 +280,7 @@ def main():
     # print(res)
 
     test_url = 'https://stackoverflow.com/questions/19979518/what-is-pythons-heapq-module'
-    r = get_web_file(test_url, './downloads/test2.html', gzip_flag=True)
+    r = get_web_file(test_url, './downloads/test2.html')
     print(r)
 
     # server = 'ftp.ncbi.nih.gov'

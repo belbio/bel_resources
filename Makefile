@@ -1,34 +1,63 @@
 # Run make help to find out what the commands are
 
-CREATE_TERMS = chebi.py
-CREATE_TERMS2 = chebi.py do.py entrez-gene.py go.py hgnc.py mesh.py mgi.py rgd.py swissprot.py taxonomy.py
+.PHONY: deploy_major deploy_minor deploy_patch list help tests
+.PHONY: livedocs load_elasticsearch collect_terms clean_all load_all
+
 # to get executable python files in the tool/terms directory
 # find terms -perm +111 -name "*.py"
 
-CREATE_TERMS_SCRIPTS = $(shell find ./tools/terms -perm +111 -name "*.py")
+TERMS_SCRIPTS = $(shell find ./tools/terms -perm +111 -name "*.py")
 
-# Create databases (elasticsearch and arangodb)
-.PHONY: load_elasticsearch
-load_elasticsearch:
-	./tools/load/setup_db.py
+define deploy_commands
+    @echo "Update CHANGELOG"
+    @echo "Create Github release and attach the gem file"
+
+    git push
+	git push --tags
+endef
 
 
-.PHONY: collect_terms
-collect_terms:
-	$(foreach script, $(CREATE_TERMS_SCRIPTS), $(script);)
+deploy_major: update_parsers
+	@echo Deploying major update
+	bumpversion major
+	@${deploy_commands}
+
+deploy_minor: update_parsers
+	@echo Deploying minor update
+	bumpversion minor
+	@${deploy_commands}
+
+deploy_patch: update_parsers
+	@echo Deploying patch update
+	bumpversion --allow-dirty patch
+	${deploy_commands}
+
+# Autobuild the sphinx docs
+livedocs:
+	cd docs; sphinx-autobuild -q -p 0 --open-browser --delay 5 source build/html
+
+
+clean_all:
+	rm data/namespaces/*
+	rm data/orthologs/*
+	bel db elasticsearch --clean
+	bel db arangodb_belns --clean
+
+load_all:
+	tools/bin/update_namespaces.py
+	tools/bin/update_orthologs.py
+	tools/load/load_elasticsearch.py
+	tools/load/load_arango.py
 
 # Run all tests
-.PHONY: test
-test:
-	./bin/runtests.sh
+tests:
+	py.test -rs --cov=./tools --cov-report html --cov-config .coveragerc -c tests/pytest.ini --color=yes --durations=10 --flakes --pep8 tests
 
 
-.PHONY: list  # ensures list is mis-identified with a file of the same name
 list:
 	@$(MAKE) -pRrq -f $(lastword $(MAKEFILE_LIST)) : 2>/dev/null | awk -v RS= -F: '/^# File/,/^# Finished Make data base/ {if ($$1 !~ "^[#.]") {print $$1}}' | sort | egrep -v -e '^[^[:alnum:]]' -e '^$@$$'
 
 
-.PHONY: help
 help:
 	@echo ${CREATE_TERMS}
 	@echo "List of commands"
@@ -37,7 +66,7 @@ help:
 	@echo "   help -- This listing "
 	@echo "   list -- Automated listing of all targets"
 
-.PHONY: check
+
 check:
 	@echo $(HOME)
 	@echo $(gulp)
