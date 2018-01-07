@@ -8,17 +8,20 @@ Introduction
 
 Welcome to the BEL Resource Tools documentation.
 
-.. image:: https://travis-ci.org/belbio/bel_resources.svg?branch=master
-   :target: https://travis-ci.org/belbio/bel_resources
-   :alt: Travis Build/Testing
+.. .. image:: https://travis-ci.org/belbio/bel_resources.svg?branch=master
+..    :target: https://travis-ci.org/belbio/bel_resources
+..    :alt: Travis Build/Testing
 
-.. image:: https://api.codeclimate.com/v1/badges/3fdfec7ee96fc639bb09/maintainability
-   :target: https://codeclimate.com/github/belbio/bel_resources/maintainability
-   :alt: Maintainability
+.. .. image:: https://api.codeclimate.com/v1/badges/3fdfec7ee96fc639bb09/maintainability
+..    :target: https://codeclimate.com/github/belbio/bel_resources/maintainability
+..    :alt: Maintainability
 
-.. image:: https://api.codeclimate.com/v1/badges/3fdfec7ee96fc639bb09/test_coverage
-   :target: https://codeclimate.com/github/belbio/bel_resources/test_coverage
-   :alt: Test Coverage
+.. .. image:: https://api.codeclimate.com/v1/badges/3fdfec7ee96fc639bb09/test_coverage
+..    :target: https://codeclimate.com/github/belbio/bel_resources/test_coverage
+..    :alt: Test Coverage
+
+Informational Badges
+-----------------------
 
 .. image:: https://badge.waffle.io/belbio/project.svg?columns=all
  :target: https://waffle.io/belbio/project
