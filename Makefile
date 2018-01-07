@@ -38,16 +38,26 @@ livedocs:
 
 
 clean_all:
-	rm data/namespaces/*
-	rm data/orthologs/*
-	bel db elasticsearch --clean
-	bel db arangodb_belns --clean
+	rm -f data/namespaces/*
+	rm -f data/orthologs/*
+	belc db elasticsearch --delete
+	belc db arangodb --delete belns
 
 load_all:
 	tools/bin/update_namespaces.py
 	tools/bin/update_orthologs.py
-	tools/load/load_elasticsearch.py
-	tools/load/load_arango.py
+	tools/bin/load_elasticsearch.py
+	tools/bin/load_arango.py
+
+
+install:
+	python3.6 -m venv .venv --prompt belres
+	.venv/bin/pip install --upgrade pip
+	.venv/bin/pip install --upgrade setuptools
+
+	.venv/bin/pip install -r requirements.txt
+	.venv/bin/pip install -r requirements-docs.txt
+
 
 # Run all tests
 tests:

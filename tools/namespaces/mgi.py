@@ -139,6 +139,7 @@ def build_json(force: bool = False):
         'lncRNA gene': ['Gene', 'RNA'],
         'intronic lncRNA gene': ['Gene', 'RNA'],
         'sense intronic lncRNA gene': ['Gene', 'RNA'],
+        'sense overlapping lncRNA gene': ['Gene', 'RNA'],
         'bidirectional promoter lncRNA gene': ['Gene', 'RNA'],
         'antisense lncRNA gene': ['Gene', 'RNA'],
         'ribozyme gene': ['Gene', 'RNA'],

@@ -33,6 +33,7 @@ Welcome to the BEL Resource Tools documentation.
    :maxdepth: 2
    :caption: Contents:
 
+   quickstart
    overview
    configuration
    namespaces

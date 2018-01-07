@@ -112,7 +112,7 @@ def get_terms(term_fn: str, index_name: str) -> Iterable[Mapping[str, Any]]:
 @click.argument('namespaces', nargs=-1)
 @click.option('-d', '--delete/--no-delete', default=False, help='Delete existing terms index')
 @click.option('-i', '--index_name', default='terms_blue', help='Use this name for index.  Default is "terms_blue"')
-def main(namespaces, delete, index_name, all):
+def main(namespaces, delete, index_name):
     """Load Namespaces
 
     Load the given namespace prefixes (<prefix>.jsonl.gz) from the bel_resources/data/namespaces directory
@@ -135,7 +135,7 @@ def main(namespaces, delete, index_name, all):
     for fn in sorted(files):
         log.info(f'Loading {fn}')
         terms = get_terms(fn, index_name)
-        bel.db.elasticsearch.bulk_load_terms(es, terms, index_name)
+        bel.db.elasticsearch.bulk_load_terms(es, terms)
 
 
 if __name__ == '__main__':

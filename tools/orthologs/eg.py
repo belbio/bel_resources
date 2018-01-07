@@ -10,7 +10,6 @@ import tempfile
 import os
 import re
 import json
-import yaml
 import datetime
 import gzip
 import logging

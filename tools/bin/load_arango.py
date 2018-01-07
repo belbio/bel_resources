@@ -9,6 +9,7 @@ Load
 import os
 import sys
 import yaml
+import click
 import glob
 import gzip
 import json
@@ -20,7 +21,7 @@ from tools.utils.Config import config
 import bel.db.arangodb as arangodb
 from bel.db.arangodb import equiv_nodes_name, equiv_edges_name
 from bel.db.arangodb import ortholog_nodes_name, ortholog_edges_name
-from bel.db.arangodb import belns_definitions, belns_db_name
+from bel.db.arangodb import belns_definitions_name, belns_db_name
 
 
 def orthologs_iter():
