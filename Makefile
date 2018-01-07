@@ -17,17 +17,17 @@ define deploy_commands
 endef
 
 
-deploy_major: update_parsers
+deploy_major:
 	@echo Deploying major update
 	bumpversion major
 	@${deploy_commands}
 
-deploy_minor: update_parsers
+deploy_minor:
 	@echo Deploying minor update
 	bumpversion minor
 	@${deploy_commands}
 
-deploy_patch: update_parsers
+deploy_patch:
 	@echo Deploying patch update
 	bumpversion --allow-dirty patch
 	${deploy_commands}
