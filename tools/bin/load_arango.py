@@ -78,7 +78,7 @@ def equivalences_iter():
     """Equivalence node and edge iterator"""
 
     species_list = config['bel_resources'].get('species_list', [])
-    files = glob.glob(f"{config['bel_resources']['file_locations']['data']}/terms/*.jsonl*")
+    files = glob.glob(f"{config['bel_resources']['file_locations']['data']}/namespaces/*.jsonl*")
     for fn in files:
         log.info(f"Starting equivalence fn: {fn}")
         with gzip.open(fn, 'r') as fi:
