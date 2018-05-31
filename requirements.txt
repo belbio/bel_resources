@@ -12,7 +12,7 @@ pytest-cov==2.5.1
 pytest-flakes==2.0.0
 pytest-mypy==0.3.1
 pytest-pep8==1.0.6
-pytest-sugar==0.9.0
+pytest-sugar==0.9.1
 python-arango==3.12.1
 python-dateutil==2.6.1
 PyYAML==3.12
