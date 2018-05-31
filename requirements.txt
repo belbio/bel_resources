@@ -2,7 +2,7 @@ bel==0.7.5
 certifi==2018.1.18
 chardet==3.0.4
 click==6.7
-elasticsearch==6.1.1
+elasticsearch==6.2.0
 fastcache==1.0.2
 idna==2.6
 pronto==0.10.2
