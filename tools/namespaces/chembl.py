@@ -17,11 +17,14 @@ import sqlite3
 import copy
 import gzip
 from typing import List, Mapping, Any, Iterable
-import logging
-import logging.config
+import tarfile
 
 import tools.utils.utils as utils
 from tools.utils.Config import config
+
+import tools.setup_logging
+import structlog
+log = structlog.getLogger(__name__)
 
 # Globals
 namespace_key = 'chembl'
@@ -29,10 +32,11 @@ namespace_def = utils.get_namespace(namespace_key, config)
 ns_prefix = namespace_def['namespace']
 
 server = 'ftp.ebi.ac.uk'
-filename_regex = r'chembl(.*?)sqlite\.tar\.gz'
+filename_regex = r'chembl_(.*?)_sqlite\.tar\.gz'
 server_directory = '/pub/databases/chembl/ChEMBLdb/latest/'
-latest_source_version = utils.get_newest_version_filename(filename_regex, server, server_directory, 1)
-source_data_fp = f'/pub/databases/chembl/ChEMBLdb/latest/chembl{latest_source_version}sqlite.tar.gz'
+chembl_version = utils.get_chembl_version(filename_regex, server, server_directory, 1)
+
+source_data_fp = f'/pub/databases/chembl/ChEMBLdb/latest/chembl_{chembl_version}_sqlite.tar.gz'
 
 # Local data filepath setup
 basename = os.path.basename(source_data_fp)
@@ -49,6 +53,7 @@ def get_metadata():
     dt = datetime.datetime.now().replace(microsecond=0).isoformat()
     metadata = {
         "name": namespace_def['namespace'],
+        "type": "namespace",
         "namespace": namespace_def['namespace'],
         "description": namespace_def['description'],
         "version": dt,
@@ -68,13 +73,25 @@ def update_data_files() -> bool:
         bool: files updated = True, False if not
     """
 
-    # update_cycle_days = config['bel_resources']['update_cycle_days']
+    result = utils.get_ftp_file(server, source_data_fp, local_data_fp, days_old=380)
 
-    result = utils.get_ftp_file(server, source_data_fp, local_data_fp, days_old=60)
+    # Notify admin if CHEMBL file is missing (e.g. they updated the CHEMBL version)
+    if not result[0]:
+        mail_to = config['bel_api']['mail']['notify_email']
+        subject = "Missing CHEMBL file"
+        msg = f"Cannot find http://{server}/{source_data_fp} - please update BEL Resource Generator CHEMBL download script"
+        result = utils.send_mail(mail_to, subject, msg)
+        log.info('Cannot find CHEMBL file to download')
+        quit()
 
     changed = False
     if 'Downloaded' in result[1]:
         changed = True
+
+    if changed:
+        tar = tarfile.open(local_data_fp)
+        tar.extractall()
+        tar.close()
 
     return changed
 
@@ -88,8 +105,10 @@ def pref_name_dupes():
         from
             molecule_dictionary
     """
+
     db_filename = f'{config["bel_resources"]["file_locations"]["downloads"]}/' \
-                  f'chembl{latest_source_version}/chembl{latest_source_version}sqlite/chembl{latest_source_version}.db'
+                  f'chembl_{chembl_version}/chembl_{chembl_version}_sqlite/chembl_{chembl_version}.db'
+
     conn = sqlite3.connect(db_filename)
     conn.row_factory = sqlite3.Row
 
@@ -111,8 +130,10 @@ def pref_name_dupes():
 def query_db() -> Iterable[Mapping[str, Any]]:
     """Generator to run chembl term queries using sqlite chembl db"""
     log.error('This script requires MANUAL interaction to get latest chembl and untar it.')
+
     db_filename = f'{config["bel_resources"]["file_locations"]["downloads"]}/' \
-                  f'chembl{latest_source_version}/chembl{latest_source_version}sqlite/chembl{latest_source_version}.db'
+                  f'chembl_{chembl_version}/chembl_{chembl_version}_sqlite/chembl_{chembl_version}.db'
+
     conn = sqlite3.connect(db_filename)
     conn.row_factory = sqlite3.Row
 
@@ -139,13 +160,14 @@ def query_db() -> Iterable[Mapping[str, Any]]:
             syns = syns.lower().split('||')
             pref_name = row['pref_name']
             alt_ids = []
+            namespace_value = src_id
 
             if pref_name:
                 alt_ids.append(chembl_id)
                 pref_name = pref_name.lower()
                 name = pref_name
                 chembl_id = utils.get_prefixed_id(ns_prefix, pref_name)
-
+                namespace_value = pref_name
             elif syns[0]:
                 name = syns[0]
             else:
@@ -153,6 +175,7 @@ def query_db() -> Iterable[Mapping[str, Any]]:
 
             term = {
                 "name": name,
+                "namespace_value": namespace_value,
                 "pref_name": pref_name,
                 "chembl_id": chembl_id,
                 "src_id": src_id,
@@ -200,6 +223,7 @@ def build_json(force: bool = False):
 
             term = {
                 'namespace': ns_prefix,
+                'namespace_value': row['namespace_value'],
                 'src_id': row['src_id'],
                 'id': row['chembl_id'],
                 'alt_ids': row['alt_ids'],
@@ -220,21 +244,16 @@ def build_json(force: bool = False):
 
 def main():
 
-    if pref_name_dupes():
-        quit()
+
 
     # Cannot detect changes as ftp server doesn't support MLSD cmd
     update_data_files()
+
+    if pref_name_dupes():
+        quit()
+
     build_json()
 
 
 if __name__ == '__main__':
-    # Setup logging
-    global log
-    module_fn = os.path.basename(__file__)
-    module_fn = module_fn.replace('.py', '')
-
-    logging.config.dictConfig(config['logging'])
-    log = logging.getLogger(f'{module_fn}-namespaces')
-
     main()

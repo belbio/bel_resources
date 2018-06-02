@@ -17,11 +17,13 @@ import datetime
 import copy
 import gzip
 from typing import List, Mapping, Any, Iterable
-import logging
-import logging.config
 
 import tools.utils.utils as utils
 from tools.utils.Config import config
+
+import tools.setup_logging
+import structlog
+log = structlog.getLogger(__name__)
 
 # Globals ###################################################################
 namespace_key = 'chebi'  # namespace key into namespace definitions file
@@ -47,6 +49,7 @@ def get_metadata():
     dt = datetime.datetime.now().replace(microsecond=0).isoformat()
     metadata = {
         "name": namespace_def['namespace'],
+        "type": "namespace",
         "namespace": namespace_def['namespace'],
         "description": namespace_def['description'],
         "version": dt,
@@ -109,6 +112,7 @@ def process_obo(force: bool = False):
 
             term = {
                 'namespace': ns_prefix,
+                'namespace_value': ont_term.id,
                 'src_id': ont_term.id,
                 'id': name_id,
                 'alt_ids': [ont_term.id],
@@ -150,11 +154,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # Setup logging
-    module_fn = os.path.basename(__file__)
-    module_fn = module_fn.replace('.py', '')
-
-    logging.config.dictConfig(config['logging'])
-    log = logging.getLogger(f'{module_fn}-namespaces')
-
     main()

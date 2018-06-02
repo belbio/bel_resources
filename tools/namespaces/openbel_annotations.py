@@ -46,18 +46,23 @@ def add_metadata():
     metadata = {
         "Evidence and Conclusion Ontology": {
             "namespace": 'ECO',
+            "version": "20160414",
         },
         "Cell Line Ontology (CLO)": {
-            "namespace": "CLO"
+            "namespace": "CLO",
+            "version": "2163",
         },
         "Experimental Factor Ontology (EFO)": {
-            "namespace": "EFO"
+            "namespace": "EFO",
+            "version": "260",
         },
         "Uberon": {
             "namespace": "UBERON",
+            "version": "2015-05-25",
         },
         "Cell Ontology (CL)": {
-            "namespace": "CL"
+            "namespace": "CL",
+            "version": "2015-05-12",
         }
     }
 
@@ -119,13 +124,15 @@ def build_json(annofiles):
 
             metadata = {}
             namespace = additional_metadata[anno_dict['Citation']['NameString'][idx]]['namespace']
+            version = additional_metadata[anno_dict['Citation']['NameString'][idx]]['version']
             terms_filename = f'{config["bel_resources"]["file_locations"]["data"]}/namespaces/{namespace}_belanno.jsonl.gz'
             metadata = {
                 'name': anno_dict['Citation']['NameString'][idx],
+                "type": "namespace",
                 'namespace': namespace,
                 'description': f"{anno_dict['Citation']['DescriptionString'][idx]}. NOTE: Converted from OpenBEL belanno file {anno_src_url}",
                 'src_url': anno_dict['Citation']['ReferenceURL'][idx],
-                'version': anno_dict['Citation']['PublishedVersionString'][idx],
+                'version': version,
             }
 
             terms = []
@@ -136,6 +143,7 @@ def build_json(annofiles):
                     src_id = vid.replace(f'{namespace}:', '')
                     term = {
                         "namespace": namespace,
+                        'namespace_value': val,
                         "src_id": src_id,
                         "id": utils.get_prefixed_id(namespace, val),
                         "label": val,

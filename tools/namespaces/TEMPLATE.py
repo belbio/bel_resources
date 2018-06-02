@@ -16,11 +16,13 @@ import datetime
 import copy
 import gzip
 from typing import List, Mapping, Any, Iterable
-import logging
-import logging.config
 
 import tools.utils.utils as utils
 from tools.utils.Config import config
+
+import tools.setup_logging
+import structlog
+log = structlog.getLogger(__name__)
 
 """
 1.  Set up globals - what files to download, any adjustments to metadata, filenames, etc
@@ -141,11 +143,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # Setup logging
-    module_fn = os.path.basename(__file__)
-    module_fn = module_fn.replace('.py', '')
-
-    logging.config.dictConfig(config['logging'])
-    log = logging.getLogger(f'{module_fn}-namespaces')
-
     main()

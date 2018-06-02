@@ -13,11 +13,13 @@ import yaml
 import datetime
 import copy
 import gzip
-import logging
-import logging.config
 
 import tools.utils.utils as utils
 from tools.utils.Config import config
+
+import tools.setup_logging
+import structlog
+log = structlog.getLogger(__name__)
 
 # Globals
 namespace_key = 'eg'
@@ -47,6 +49,12 @@ if not re.search('.gz$', basename):  # we basically gzip everything retrieved th
     basename = f'{basename}.gz'
 local_data_history_fp = f'{config["bel_resources"]["file_locations"]["downloads"]}/{namespace_key}_{basename}'
 
+# Terminology JSONL output filename
+data_fp = config["bel_resources"]["file_locations"]["data"]
+terms_fp = f'{data_fp}/namespaces/{namespace_key}.jsonl.gz'
+terms_hmrz_fp = f'{data_fp}/namespaces/{namespace_key}_hmrz.jsonl.gz'  # Human, mouse, rat and zebrafish EG dataset
+hmrz_species = ['TAX:9606', 'TAX:10090', 'TAX:10116', 'TAX:7955']
+
 
 def get_metadata():
     # Setup metadata info - mostly captured from namespace definition file which
@@ -54,6 +62,7 @@ def get_metadata():
     dt = datetime.datetime.now().replace(microsecond=0).isoformat()
     metadata = {
         "name": namespace_def['namespace'],
+        "type": "namespace",
         "namespace": namespace_def['namespace'],
         "description": namespace_def['description'],
         "version": dt,
@@ -118,10 +127,6 @@ def build_json(force: bool = False):
         None
     """
 
-    # Terminology JSONL output filename
-    data_fp = config["bel_resources"]["file_locations"]["data"]
-    terms_fp = f'{data_fp}/namespaces/{namespace_key}.jsonl.gz'
-
     # Don't rebuild file if it's newer than downloaded source file
     if not force:
         if utils.file_newer(terms_fp, local_data_fp):
@@ -182,6 +187,7 @@ def build_json(force: bool = False):
 
             term = {
                 'namespace': ns_prefix,
+                'namespace_value': gene_id,
                 'src_id': gene_id,
                 'id': utils.get_prefixed_id(ns_prefix, gene_id),
                 'label': symbol,
@@ -209,18 +215,24 @@ def build_json(force: bool = False):
         log.error('Missing Entity Types:\n', json.dumps(missing_entity_types))
 
 
+def build_hmr_json():
+    """Extract Human, Mouse and Rat from EG into a new file """
+
+    with gzip.open(terms_fp, 'rt') as fi, gzip.open(terms_hmrz_fp, 'wt') as fo:
+        for line in fi:
+            doc = json.loads(line)
+            if 'term' in doc and doc['term']['species_id'] in hmrz_species:
+                fo.write("{}\n".format(json.dumps(doc)))
+            elif 'metadata' in doc:
+                fo.write("{}\n".format(json.dumps(doc)))
+
+
 def main():
 
     update_data_files()
     build_json()
+    build_hmr_json()  # human, mouse, rat filtered EG namespace
 
 
 if __name__ == '__main__':
-    # Setup logging
-    module_fn = os.path.basename(__file__)
-    module_fn = module_fn.replace('.py', '')
-
-    logging.config.dictConfig(config['logging'])
-    log = logging.getLogger(f'{module_fn}-namespaces')
-
     main()

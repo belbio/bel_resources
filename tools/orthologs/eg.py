@@ -12,11 +12,13 @@ import re
 import json
 import datetime
 import gzip
-import logging
-import logging.config
 
 from tools.utils.Config import config
 import tools.utils.utils as utils
+
+import setup_logging
+import structlog
+log = structlog.getLogger(__name__)
 
 # Globals
 prefix = 'eg'
@@ -28,16 +30,19 @@ tax_ns_prefix = species_namespace['namespace']
 
 data_fp = config["bel_resources"]["file_locations"]["data"]
 orthologs_fp = f'{data_fp}/orthologs/{prefix}.jsonl.gz'
+orthologs_hmrz_fp = f'{data_fp}/orthologs/{prefix}_hmrz.jsonl.gz'  # Human, mouse, rat and zebrafish only orthologs
+hmrz_species = ['TAX:9606', 'TAX:10090', 'TAX:10116', 'TAX:7955']
 
 tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
 dt = datetime.datetime.now().replace(microsecond=0).isoformat()
 
 server = 'ftp.ncbi.nlm.nih.gov'
-remote_file = '/gene/DATA/gene_group.gz'
+remote_file = '/gene/DATA/gene_orthologs.gz'
 
 orthologs_metadata = {
     "source": namespace['namespace'],
     "src_url": namespace['src_url'],
+    "type": "ortholog",
     "description": namespace['description'] + ' orthologs',
     "version": dt,
 }
@@ -47,7 +52,7 @@ orthologs_metadata = {
 basename = os.path.basename(remote_file)
 
 if not re.search('.gz$', basename):  # we basically gzip everything retrieved that isn't already gzipped
-    basename = f'{basename}.gz'
+    basename = f'eg_{basename}.gz'
 
 local_data_fp = f'{config["bel_resources"]["file_locations"]["downloads"]}/{basename}'
 
@@ -106,21 +111,27 @@ def build_json(force: bool = False):
             fo.write("{}\n".format(json.dumps({'ortholog': ortholog})))
 
 
+def build_hmr_json():
+    """Extract Human, Mouse and Rat from EG into a new file """
+
+    with gzip.open(orthologs_fp, 'rt') as fi, gzip.open(orthologs_hmrz_fp, 'wt') as fo:
+        for line in fi:
+            doc = json.loads(line)
+            if 'metadata' not in doc:
+                if doc['ortholog']['subject']['tax_id'] in hmrz_species and doc['ortholog']['object']['tax_id'] in hmrz_species:
+                    fo.write("{}\n".format(json.dumps(doc)))
+            elif 'metadata' in doc:
+                fo.write("{}\n".format(json.dumps(doc)))
+
+
 def main():
 
     # Cannot detect changes as ftp server doesn't support MLSD cmd
     update_data_files()
     build_json()
+    build_hmr_json()
 
 
 if __name__ == '__main__':
-    # Setup logging
-    global log
-    module_fn = os.path.basename(__file__)
-    module_fn = module_fn.replace('.py', '')
-
-    logging.config.dictConfig(config['logging'])
-    log = logging.getLogger(f'{module_fn}-orthologs')
-
     main()
 

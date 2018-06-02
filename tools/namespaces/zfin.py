@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Usage:  TEMPLATE.py
+Usage:  zfin.py
 
 """
 
@@ -13,22 +13,13 @@ import yaml
 import datetime
 import copy
 import gzip
-import logging
-import logging.config
 
 import tools.utils.utils as utils
 from tools.utils.Config import config
 
-
-"""
-1.  Set up globals - what files to download, any adjustments to metadata, filenames, etc
-    update 'REPLACEME' text
-2.  Download source data files [update_data_files()]
-3.  Dataset preprocessing - e.g. double check term names for duplicates if you
-    plan on using them for IDs, pre-collect information needed to build the term record
-4.  Process terms and write them to terms_fp file
-    filter out species not in config['bel_resources']['species_list'] unless empty list
-"""
+import tools.setup_logging
+import structlog
+log = structlog.getLogger(__name__)
 
 # Globals ###################################################################
 namespace_key = 'zfin'  # namespace key into namespace definitions file
@@ -42,6 +33,7 @@ def get_metadata():
     dt = datetime.datetime.now().replace(microsecond=0).isoformat()
     metadata = {
         "name": namespace_def['namespace'],
+        "type": "namespace",
         "namespace": namespace_def['namespace'],
         "description": namespace_def['description'],
         "version": dt,
@@ -172,6 +164,7 @@ def build_json(force: bool = False):
 
             term = {
                 'namespace': ns_prefix,
+                'namespace_value': main_id,
                 'src_id': term,
                 'id': f'{ns_prefix}:{main_id}',
                 'alt_ids': [],
@@ -195,11 +188,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # Setup logging
-    module_fn = os.path.basename(__file__)
-    module_fn = module_fn.replace('.py', '')
-
-    logging.config.dictConfig(config['logging'])
-    log = logging.getLogger(f'{module_fn}-namespaces')
-
     main()

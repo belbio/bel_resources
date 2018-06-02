@@ -18,8 +18,11 @@ from typing import Tuple, Mapping, Any
 import requests
 from dateutil import parser
 
-import logging
-log = logging.getLogger(__name__)
+from tools.utils.Config import config
+
+import tools.setup_logging
+import structlog
+log = structlog.getLogger(__name__)
 
 # Automatically-creating-directories-with-file-output
 # https://stackoverflow.com/questions/12517451/automatically-creating-directories-with-file-output
@@ -244,7 +247,21 @@ def get_ftp_file(server: str, rfile: str, lfile: str, days_old: int = 7, force: 
             return False, error
 
 
-def get_newest_version_filename(regex: str, server_host: str, server_path: str, group_num: int) -> str:
+def send_mail(mail_to: str, subject: str, msg: str, mail_from: str = config['bel_api']['mail']['admin_email']):
+    """Send mail using MailGun API"""
+
+    data = {
+        "to": mail_to,
+        "from": mail_from,
+        "subject": subject,
+        "text": msg,
+    }
+
+    request = requests.post(f"{config['bel_api']['mail']['api']}/messages", auth=('api', config['secrets']['bel_api']['mail']['api_key']), data=data)
+    return request
+
+
+def get_chembl_version(regex: str, server_host: str, server_path: str, group_num: int) -> str:
     """Get the name of the first file matching the regex string at the specified FTP server directory
 
         Args:
@@ -255,7 +272,8 @@ def get_newest_version_filename(regex: str, server_host: str, server_path: str, 
 
         Returns:
             str: string that matches the group specified in the regex; could be version number or any other info wanted
-        """
+    """
+
     ftp = ftplib.FTP(host=server_host)
     ftp.login()
     ftp.cwd(server_path)

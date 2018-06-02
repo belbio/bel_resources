@@ -35,6 +35,7 @@ remote_file = '/pub/databases/genenames/new/json/hgnc_complete_set.json'
 
 orthologs_metadata = {
     "source": namespace['namespace'],
+    "type": "ortholog",
     "src_url": namespace['src_url'],
     "description": namespace['description'] + ' orthologs',
     "version": dt,

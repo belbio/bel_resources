@@ -130,11 +130,14 @@ def build_json(nsfiles):
                 ref_url = ns_dict['Citation']['ReferenceURL'][idx]
 
             version = ''
-            if 'PublishedVersionString' in ns_dict['Citation']:
+            if 'VersionString' in ns_dict['Namespace']:
+                version = ns_dict['Namespace']['VersionString'][idx]
+            elif 'PublishedVersionString' in ns_dict['Citation']:
                 version = ns_dict['Citation']['PublishedVersionString'][idx]
 
             metadata = {
                 'name': ns_dict['Citation']['NameString'][idx],
+                "type": "namespace",
                 'namespace': namespace,
                 'description': f"{ns_dict['Namespace']['DescriptionString'][idx]}. NOTE: Converted from OpenBEL belns file {nsfile_src_url}",
                 'src_url': ref_url,
@@ -152,6 +155,7 @@ def build_json(nsfiles):
                 entity_types = value['entity_types']
                 term = {
                     "namespace": namespace,
+                    'namespace_value': name,
                     "id": term_id,
                     "name": name,
                     "entity_types": entity_types,

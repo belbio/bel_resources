@@ -14,12 +14,14 @@ import json
 import yaml
 import datetime
 import gzip
-import logging
-import logging.config
 import copy
 
 import tools.utils.utils as utils
 from tools.utils.Config import config
+
+import tools.setup_logging
+import structlog
+log = structlog.getLogger(__name__)
 
 # Globals
 namespace_key = 'mesh'
@@ -57,8 +59,8 @@ local_data_fp = f'{config["bel_resources"]["file_locations"]["downloads"]}/{name
 basename = os.path.basename(source_data_concepts_fp)
 
 if not re.search('.gz$', basename):  # we basically gzip everything retrieved that isn't already gzipped
-
     basename = f'{basename}.gz'
+
 local_data_concepts_fp = f'{config["bel_resources"]["file_locations"]["downloads"]}/{namespace_key}_{basename}'
 
 
@@ -74,6 +76,7 @@ def get_metadata():
     dt = datetime.datetime.now().replace(microsecond=0).isoformat()
     metadata = {
         "name": namespace_def['namespace'],
+        "type": "namespace",
         "namespace": namespace_def['namespace'],
         "description": namespace_def['description'],
         "version": dt,
@@ -126,6 +129,8 @@ def process_types(mesh_id, mns, sts):
             if re.match('G', mn) and not re.match('G01|G15|G17', mn):
                 entity_types.add('BiologicalProcess')
             if re.match('D', mn):
+                entity_types.add('Abundance')
+            if re.match('J02', mn):
                 entity_types.add('Abundance')
 
     elif sts:  # Concepts
@@ -186,6 +191,7 @@ def build_json(force: bool = False):
                 syns = process_synonyms(syns)
                 term = {
                     'namespace': ns_prefix,
+                    'namespace_value': mh,
                     'src_id': mesh_id,
                     'id': utils.get_prefixed_id(ns_prefix, mh),
                     'alt_ids': [utils.get_prefixed_id(ns_prefix, mesh_id)],
@@ -243,13 +249,6 @@ def main():
 
 
 if __name__ == '__main__':
-    # Setup logging
-    module_fn = os.path.basename(__file__)
-    module_fn = module_fn.replace('.py', '')
-
-    logging.config.dictConfig(config['logging'])
-    log = logging.getLogger(f'{module_fn}-namespaces')
-
     main()
 
 
