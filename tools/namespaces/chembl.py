@@ -34,7 +34,9 @@ ns_prefix = namespace_def['namespace']
 server = 'ftp.ebi.ac.uk'
 filename_regex = r'chembl_(.*?)_sqlite\.tar\.gz'
 server_directory = '/pub/databases/chembl/ChEMBLdb/latest/'
-chembl_version = utils.get_chembl_version(filename_regex, server, server_directory, 1)
+
+#chembl_version = utils.get_chembl_version(filename_regex, server, server_directory, 1)
+chembl_version = '24'
 
 source_data_fp = f'/pub/databases/chembl/ChEMBLdb/latest/chembl_{chembl_version}_sqlite.tar.gz'
 
@@ -108,6 +110,8 @@ def pref_name_dupes():
 
     db_filename = f'{config["bel_resources"]["file_locations"]["downloads"]}/' \
                   f'chembl_{chembl_version}/chembl_{chembl_version}_sqlite/chembl_{chembl_version}.db'
+
+    print('FN', db_filename)
 
     conn = sqlite3.connect(db_filename)
     conn.row_factory = sqlite3.Row
