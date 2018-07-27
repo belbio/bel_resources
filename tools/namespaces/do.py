@@ -112,6 +112,7 @@ def process_obo(force: bool = False):
                 'synonyms': [],
                 'children': [],
                 'annotation_types': ['Disease'],
+                'entity_types': ['Pathology'],
                 'equivalences': [],
             }
             if ont_term.name not in unique_names:

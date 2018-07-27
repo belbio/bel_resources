@@ -11,9 +11,13 @@ Generate backbone edges g() transcribedTo r() and
 import json
 import gzip
 
-datafile = '../data/terms/eg.jsonl.gz'
+from tools.utils.Config import config
 
-# TODO - change this to load to EdgeStore directly
+import tools.setup_logging
+import structlog
+log = structlog.getLogger(__name__)
+
+eg_datafile = f'{config["bel_resources"]["file_locations"]["data"]}/namespaces/eg.jsonl.gz'
 
 
 def process_backbone():

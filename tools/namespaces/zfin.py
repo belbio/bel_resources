@@ -145,7 +145,7 @@ def build_json(force: bool = False):
         for line in fi:
             (src_id, so_id, symbol, eg_id, *extra) = line.split('\t')
             if src_id in terms:
-                terms[src_id]['equivalences'] = [f'EG:{eg_id}']
+                terms[src_id]['equivalences'] = [f'EG:{eg_id.strip()}']
                 if terms[src_id].get('symbol', None) and symbol:
                     terms[src_id]['symbol'] = symbol
             else:

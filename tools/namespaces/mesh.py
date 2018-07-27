@@ -120,6 +120,8 @@ def process_types(mesh_id, mns, sts):
                 annotation_types.add('Anatomy')
             if re.match('A11', mn) and not re.match('A11.284', mn):
                 annotation_types.add('Cell')
+            if re.match('A11.251.210', mn):
+                annotation_types.add('CellLine')
             if re.match('A11.284', mn):
                 entity_types.add('Location')
                 annotation_types.add('CellStructure')

@@ -244,10 +244,9 @@ def build_json(force: bool = False):
 
 def main():
 
-
-
     # Cannot detect changes as ftp server doesn't support MLSD cmd
-    update_data_files()
+
+    # update_data_files()
 
     if pref_name_dupes():
         quit()
