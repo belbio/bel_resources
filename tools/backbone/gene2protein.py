@@ -23,6 +23,8 @@ backbone_hmrz_fn = f'{config["bel_resources"]["file_locations"]["data"]}/backbon
 
 hmrz_species = ['TAX:9606', 'TAX:10090', 'TAX:10116', 'TAX:7955']
 
+src_url = "https://www.ncbi.nlm.nih.gov/gene/"
+
 
 def process_backbone():
 
