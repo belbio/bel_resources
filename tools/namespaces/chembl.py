@@ -138,18 +138,16 @@ def query_db() -> Iterable[Mapping[str, Any]]:
     conn.row_factory = sqlite3.Row
 
     main_sql = """
-        select
-            chembl_id, syn_type, group_concat(synonyms, "||") as syns,
+        SELECT
+            chembl_id, syn_type, group_concat(synonyms, "||") AS syns,
             standard_inchi_key, chebi_par_id, molecule_type, pref_name
-        from
-            molecule_dictionary md,
-            molecule_synonyms ms,
-            compound_structures cs
-        where
-            md.molregno=ms.molregno and
-            md.molregno=cs.molregno
-        group
-            by ms.molregno"""
+        FROM
+            molecule_dictionary md
+        LEFT OUTER JOIN molecule_synonyms ms ON md.molregno=ms.molregno
+        LEFT OUTER JOIN compound_structures cs ON md.molregno=cs.molregno
+        GROUP
+            by ms.molregno
+    """
 
     with conn:
         for row in conn.execute(main_sql):

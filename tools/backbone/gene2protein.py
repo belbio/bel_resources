@@ -18,63 +18,70 @@ import structlog
 log = structlog.getLogger(__name__)
 
 eg_datafile = f'{config["bel_resources"]["file_locations"]["data"]}/namespaces/eg.jsonl.gz'
+backbone_fn = f'{config["bel_resources"]["file_locations"]["data"]}/backbone/eg_backbone_nanopubs.jsonl.gz'
+backbone_hmrz_fn = f'{config["bel_resources"]["file_locations"]["data"]}/backbone/eg_backbone_nanopubs_hmrz.jsonl.gz'
+
+hmrz_species = ['TAX:9606', 'TAX:10090', 'TAX:10116', 'TAX:7955']
 
 
 def process_backbone():
+
     # count = 0
-    with gzip.open(datafile, 'rt') as fi, gzip.open(backbone_fn, 'wt') as fo:
+    with gzip.open(eg_datafile, 'rt') as fi, gzip.open(backbone_fn, 'wt') as fo, gzip.open(backbone_hmrz_fn, 'wt') as fz:
 
         for line in fi:
             term = json.loads(line)
-            if 'terminology' in term:
-                namespace = term['terminology']['namespace']
+            # Skip metadata record
+            if 'term' not in term:
                 continue
 
-            # print(term)
             term_id = term['term']['id']
+            src_id = term['term']['src_id']
             # label = term['term']['label']
-            species = term['term']['species']
-            edges = []
+            species = term['term']['species_id']
+            species_label = term['term']['species_label']
+
+            assertions = []
             entity_types = term['term']['entity_types']
             if 'Protein' in entity_types:
-                edges.append(
+                assertions.append(
                     {
-                        'subject': f'g({namespace}:{term_id})',
+                        'subject': f'g({term_id})',
                         'relation': 'transcribedTo',
-                        'object': f'r({namespace}:{term_id})',
-                        # 'subject_lbl': f'g({label})',
-                        # 'object_lbl': f'r({label})',
-                        'species': f'TAX:{species}',
+                        'object': f'r({term_id})',
                     }
                 )
-                edges.append(
+                assertions.append(
                     {
-                        'subject': f'r({namespace}:{term_id})',
+                        'subject': f'r({term_id})',
                         'relation': 'translatedTo',
-                        'object': f'p({namespace}:{term_id})',
-                        # 'subject_lbl': f'r({label})',
-                        # 'object_lbl': f'p({label})',
-                        'species': f'TAX:{species}',
+                        'object': f'p({term_id})',
                     }
                 )
 
             elif 'RNA' in entity_types or 'Micro_RNA' in entity_types:
-                edges.append(
+                assertions.append(
                     {
-                        'subject': f'g({namespace}:{term_id})',
+                        'subject': f'g({term_id})',
                         'relation': 'transcribedTo',
-                        'object': f'r({namespace}:{term_id})',
-                        # 'subject_lbl': f'g({label})',
-                        # 'object_lbl': f'r({label})',
-                        'species': f'TAX:{species}',
+                        'object': f'r({term_id})',
                     }
                 )
+            else:
+                continue
 
-            for edge in edges:
-                fo.write('{}\n'.format(json.dumps(edge)))
-                # count += 1
-                # if count > 10:
-                #     quit()
+            nanopub = {
+                "type": {"name": "BEL", "version": "2.0.0"},
+                'citation': {'uri': f'{src_url}{src_id}'},
+                'assertions': assertions,
+                'annotations': [{'type': 'Species', 'id': species, 'label': species_label}],
+                'metadata': {},
+            }
+
+            if species in hmrz_species:
+                fz.write(f'{{"nanopub": {json.dumps(nanopub)}}}\n')
+
+            fo.write(f'{{"nanopub": {json.dumps(nanopub)}}}\n')
 
 
 def main():
