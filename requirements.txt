@@ -17,7 +17,7 @@ python-arango==4.1.0
 python-json-logger==0.1.8
 python-dateutil==2.7.3
 PyYAML==3.12
-requests==2.18.4
+requests==2.19.1
 six==1.11.0
 structlog==18.1.0
 timy==0.4.0
