@@ -10,7 +10,7 @@ pytest==3.6.0
 pytest-cache==1.0
 pytest-cov==2.5.1
 pytest-flakes==3.0.2
-pytest-mypy==0.3.1
+pytest-mypy==0.3.2
 pytest-pep8==1.0.6
 pytest-sugar==0.9.1
 python-arango==4.1.0
