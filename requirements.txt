@@ -14,7 +14,7 @@ pytest-mypy==0.3.1
 pytest-pep8==1.0.6
 pytest-sugar==0.9.1
 python-arango==4.1.0
-python-json-logger==0.1.8
+python-json-logger==0.1.9
 python-dateutil==2.7.3
 PyYAML==3.12
 requests==2.18.4
