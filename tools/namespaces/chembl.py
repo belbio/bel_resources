@@ -48,6 +48,13 @@ if not re.search('.gz$', basename):  # we basically gzip everything retrieved th
 
 local_data_fp = f'{config["bel_resources"]["file_locations"]["downloads"]}/{basename}'
 
+print("""
+      This script requires MANUAL interaction to get latest chembl and untar it.
+
+      Further, the 16Gb sqlite database for Chembl won't copy into the S3 Bucket (might be an s3fuse issue).
+      This script has to be run outside of the BELResGen server.
+      """)
+
 
 def get_metadata():
     # Setup metadata info - mostly captured from namespace definition file which
@@ -111,8 +118,6 @@ def pref_name_dupes():
     db_filename = f'{config["bel_resources"]["file_locations"]["downloads"]}/' \
                   f'chembl_{chembl_version}/chembl_{chembl_version}_sqlite/chembl_{chembl_version}.db'
 
-    print('FN', db_filename)
-
     conn = sqlite3.connect(db_filename)
     conn.row_factory = sqlite3.Row
 
@@ -150,7 +155,7 @@ def query_db() -> Iterable[Mapping[str, Any]]:
         LEFT OUTER JOIN molecule_synonyms ms ON md.molregno=ms.molregno
         LEFT OUTER JOIN compound_structures cs ON md.molregno=cs.molregno
         GROUP
-            by ms.molregno
+            by md.molregno
     """
 
     with conn:
@@ -159,7 +164,11 @@ def query_db() -> Iterable[Mapping[str, Any]]:
             chembl_id = row['chembl_id'].replace('CHEMBL', 'CHEMBL:')
             src_id = row['chembl_id'].replace('CHEMBL', '')
             syns = row['syns']
-            syns = syns.lower().split('||')
+            if syns:
+                syns = syns.lower().split('||')
+            else:
+                syns = []
+
             pref_name = row['pref_name']
             alt_ids = []
             namespace_value = src_id
@@ -170,7 +179,7 @@ def query_db() -> Iterable[Mapping[str, Any]]:
                 name = pref_name
                 chembl_id = utils.get_prefixed_id(ns_prefix, pref_name)
                 namespace_value = pref_name
-            elif syns[0]:
+            elif syns:
                 name = syns[0]
             else:
                 name = chembl_id
