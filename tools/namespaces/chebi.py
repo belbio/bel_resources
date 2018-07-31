@@ -88,63 +88,93 @@ def process_obo(force: bool = False):
             log.info('Will not rebuild data file as it is newer than downloaded source file')
             return False
 
-    with gzip.open(local_data_fp, 'r') as fi, gzip.open(terms_fp, 'wt') as fo:
+    with gzip.open(local_data_fp, 'rt') as fi, gzip.open(terms_fp, 'wt') as fo:
 
         # Header JSONL record for terminology
         metadata = get_metadata()
         fo.write("{}\n".format(json.dumps({'metadata': metadata})))
 
-        ont = pronto.Ontology(fi)
+        term = {}
+
+        keyval_regex = re.compile('(\w[\-\w]+)\:\s(.*?)\s*$')
+        term_regex = re.compile('[Term]')
+        blankline_regex = re.compile('\s*$')
+
         unique_names = {}
 
-        for ont_term in ont:
+        for line in fi:
+            term_match = term_regex.match(line)
+            blank_match = blankline_regex.match(line)
+            keyval_match = keyval_regex.match(line)
 
-            # Skip 1_STAR and deleted entries - 1_STAR - are user submitted
-            #   2_STAR are automatically submitted by an organization,
-            #   3_STAR are checked by CHEBI curators
+            if term_match:
+                term = {
+                    'namespace': ns_prefix,
+                    'namespace_value': '',
+                    'src_id': '',
+                    'id': '',
+                    'label': '',
+                    'name': '',
+                    'description': '',
+                    'synonyms': [],
+                    'entity_types': ['Abundance'],
+                    'equivalences': [],
+                    'alt_ids': [],
+                }
+            elif term.get('id', None) and blank_match:
+                # Add term to JSONL
+                fo.write("{}\n".format(json.dumps({'term': term})))
 
-            subset = ont_term.other.get('subset', ['null'])[0]
+            elif term and keyval_match:
+                key = keyval_match.group(1)
+                val = keyval_match.group(2)
 
-            if subset not in ['2_STAR', '3_STAR']:
-                continue
+                if key == 'id':
+                    term['src_id'] = val
 
-            name_id = utils.get_prefixed_id(ns_prefix, ont_term.name)
+                elif key == 'name':
 
-            term = {
-                'namespace': ns_prefix,
-                'namespace_value': ont_term.id,
-                'src_id': ont_term.id,
-                'id': name_id,
-                'alt_ids': [ont_term.id],
-                'label': ont_term.name,
-                'name': ont_term.name,
-                'description': ont_term.desc,
-                'synonyms': [],
-                'entity_types': ['Abundance'],
-                'equivalences': [],
-            }
+                    if val not in unique_names:
+                        unique_names[val] = 1
+                    else:
+                        log.error(f'Duplicate name in CHEBI: {val}')
 
-            # Some chebi names are over 500 chars long
-            if len(name_id) > 80:
-                term['id'] = ont_term.id
-                term['alt_ids'] = [name_id]
+                    name_id = utils.get_prefixed_id(ns_prefix, val)
+                    term['label'] = val
+                    term['name'] = val
+                    if len(name_id) > 80:
+                        term['id'] = term['src_id']
+                        term['alt_ids'].append(name_id)
+                        term['namespace_value'] = term['src_id'].replace('CHEBI:', '')
+                    else:
+                        term['id'] = name_id
+                        term['alt_ids'].append(term['src_id'])
+                        term['namespace_value'] = val
 
-            if ont_term.name not in unique_names:
-                unique_names[ont_term.name] = 1
-            else:
-                log.error(f'Duplicate name in CHEBI: {ont_term.name}')
+                elif key == 'subset':
+                    if val not in ['2_STAR', '3_STAR']:
+                        term = {}
+                        continue
 
-            for syn in ont_term.synonyms:
-                term['synonyms'].append(syn.desc)
+                elif key == 'def':
+                    term['description'] == val
 
-            for pv in ont_term.other.get('property_value', []):
-                match = re.search('inchikey\s+\"([A-Z\-]+)\"', pv)
-                if match:
-                    inchi_key = match.group(1)
-                    term['equivalences'].append(f'INCHIKEY:{inchi_key}')
+                elif key == 'synonym':
+                    matches = re.search('\"(.*?)\"', val)
+                    if matches:
+                        syn = matches.group(1)
+                        term['synonyms'].append(syn)
+                    else:
+                        print(f'Unmatched synonym: {val}')
 
-            # Add term to JSONL
-            fo.write("{}\n".format(json.dumps({'term': term})))
+                elif key == 'alt_id':
+                    term['alt_ids'].append(val.strip())
+
+                elif key == 'property_value':
+                    matches = re.search('inchikey\s\"(.*?)\"', val)
+                    if matches:
+                        inchikey = matches.group(1)
+                        term['equivalences'].append(f'INCHIKEY:{inchikey}')
 
 
 def main():
