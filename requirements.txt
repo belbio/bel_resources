@@ -23,4 +23,4 @@ structlog==18.1.0
 timy==0.4.0
 tornado==5.0.2
 typing==3.6.4
-urllib3==1.22
+urllib3==1.23
