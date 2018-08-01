@@ -97,7 +97,7 @@ def process_obo(force: bool = False):
         term = {}
 
         keyval_regex = re.compile('(\w[\-\w]+)\:\s(.*?)\s*$')
-        term_regex = re.compile('[Term]')
+        term_regex = re.compile('\[Term\]')
         blankline_regex = re.compile('\s*$')
 
         unique_names = {}
@@ -106,7 +106,6 @@ def process_obo(force: bool = False):
             term_match = term_regex.match(line)
             blank_match = blankline_regex.match(line)
             keyval_match = keyval_regex.match(line)
-
             if term_match:
                 term = {
                     'namespace': ns_prefix,
@@ -121,9 +120,12 @@ def process_obo(force: bool = False):
                     'equivalences': [],
                     'alt_ids': [],
                 }
-            elif term.get('id', None) and blank_match:
+
+            elif blank_match:
                 # Add term to JSONL
-                fo.write("{}\n".format(json.dumps({'term': term})))
+                if term.get('id', None):
+                    fo.write("{}\n".format(json.dumps({'term': term})))
+                term = {}
 
             elif term and keyval_match:
                 key = keyval_match.group(1)
@@ -133,8 +135,9 @@ def process_obo(force: bool = False):
                     term['src_id'] = val
 
                 elif key == 'name':
-
-                    if val not in unique_names:
+                    if val == 'albiglutide':
+                        pass  # Duplicate is an obsolete record
+                    elif val not in unique_names:
                         unique_names[val] = 1
                     else:
                         log.error(f'Duplicate name in CHEBI: {val}')
@@ -165,7 +168,7 @@ def process_obo(force: bool = False):
                         syn = matches.group(1)
                         term['synonyms'].append(syn)
                     else:
-                        print(f'Unmatched synonym: {val}')
+                        log.warning(f'Unmatched synonym: {val}')
 
                 elif key == 'alt_id':
                     term['alt_ids'].append(val.strip())
@@ -175,6 +178,9 @@ def process_obo(force: bool = False):
                     if matches:
                         inchikey = matches.group(1)
                         term['equivalences'].append(f'INCHIKEY:{inchikey}')
+
+                elif key == 'is_obsolete':
+                    term = {}
 
 
 def main():

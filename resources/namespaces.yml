@@ -59,7 +59,10 @@ chebi:
   namespace: CHEBI
   src_url: https://www.ebi.ac.uk/chebi/
   template_url: https://www.ebi.ac.uk/chebi/searchId.do?chebiId=<src_id>
-  description: Chemical Entities of Biological Interest
+  description: |
+    Chemical Entities of Biological Interest - one star entries (non-curated) are
+    filtered out. Obsolete records are also removed as they cannot be matched to
+    current CHEBI entities.
 
 pubchem:
   namespace: PUBCHEM
