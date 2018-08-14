@@ -15,7 +15,6 @@ import yaml
 import datetime
 import copy
 import gzip
-import pronto
 
 import tools.utils.utils as utils
 from tools.utils.Config import config
@@ -86,53 +85,115 @@ def process_obo(force: bool = False):
             log.info('Will not rebuild data file as it is newer than downloaded source file')
             return False
 
-    with gzip.open(local_data_fp, 'r') as fi, gzip.open(terms_fp, 'wt') as fo:
+    with gzip.open(local_data_fp, 'rt') as fi, gzip.open(terms_fp, 'wt') as fo:
 
         # Header JSONL record for terminology
         metadata = get_metadata()
         fo.write("{}\n".format(json.dumps({'metadata': metadata})))
 
-        ont = pronto.Ontology(fi)
+        term = {}
+
+        keyval_regex = re.compile('(\w[\-\w]+)\:\s(.*?)\s*$')
+        term_regex = re.compile('\[Term\]')
+        blankline_regex = re.compile('\s*$')
+
         unique_names = {}
 
-        for ont_term in ont:
-            if 'is_obsolete' in ont_term.other:
-                continue
+        for line in fi:
+            term_match = term_regex.match(line)
+            blank_match = blankline_regex.match(line)
+            keyval_match = keyval_regex.match(line)
+            if term_match:
+                term = {
+                    'namespace': ns_prefix,
+                    'namespace_value': '',
+                    'src_id': '',
+                    'id': '',
+                    'label': '',
+                    'name': '',
+                    'description': '',
+                    'synonyms': [],
+                    'annotation_types': ['Disease'],
+                    'entity_types': ['Pathology'],
+                    'equivalences': [],
+                    'parents': [],
+                    'alt_ids': [],
+                }
 
-            src_id = ont_term.id.replace('DOID:', '')
-            term = {
-                'namespace': ns_prefix,
-                'namespace_value': ont_term.name,
-                'src_id': src_id,
-                'id': utils.get_prefixed_id(ns_prefix, ont_term.name),
-                'alt_ids': [utils.get_prefixed_id(ns_prefix, src_id)],
-                'label': ont_term.name,
-                'name': ont_term.name,
-                'description': ont_term.desc,
-                'synonyms': [],
-                'children': [],
-                'annotation_types': ['Disease'],
-                'entity_types': ['Pathology'],
-                'equivalences': [],
-            }
-            if ont_term.name not in unique_names:
-                unique_names[ont_term.name] = 1
-            else:
-                log.error(f'Duplicate name in DO: {ont_term.name}')
+            elif blank_match:
+                # Add term to JSONL
+                if term.get('obsolete', False):
+                    pass  # Skip obsolete terms
+                elif term.get('id', None):
+                    fo.write("{}\n".format(json.dumps({'term': term})))
 
-            for syn in ont_term.synonyms:
-                term['synonyms'].append(syn.desc)
+                    if term['name'] not in unique_names:
+                        unique_names[term['name']] = 1
+                    else:
+                        log.error(f'Duplicate name in DO: {term["name"]}')
 
-            for c in ont_term.children:
-                term['children'].append(c.id.replace('DOID:', ''))
+                term = {}
 
-            if 'xref' in ont_term.other:
-                for xref in ont_term.other['xref']:
-                    if re.match('MESH:', xref):
-                        term['equivalences'].append(xref)
+            elif term and keyval_match:
+                key = keyval_match.group(1)
+                val = keyval_match.group(2)
 
-            # Add term to JSONL
-            fo.write("{}\n".format(json.dumps({'term': term})))
+                if key == 'id':
+                    term['src_id'] = val
+
+                elif key == 'name':
+                    name_id = utils.get_prefixed_id(ns_prefix, val)
+                    term['label'] = val
+                    term['name'] = val
+                    if len(name_id) > 80:
+                        term['id'] = term['src_id'].replace('DOID', 'DO')
+                        term['alt_ids'].append(name_id)
+                        term['namespace_value'] = term['src_id'].replace('DO:', '')
+                    else:
+                        term['id'] = name_id
+                        term['alt_ids'].append(term['src_id'].replace('DOID', 'DO'))
+                        term['namespace_value'] = val
+
+                elif key == 'is_obsolete':
+                    # print('Obsolete', term['alt_ids'])
+                    term['obsolete'] = True
+
+                elif key == 'def':
+                    term['description'] = val
+
+                elif key == 'synonym':
+                    matches = re.search('\"(.*?)\"', val)
+                    if matches:
+                        syn = matches.group(1).strip()
+                        term['synonyms'].append(syn)
+                    else:
+                        log.warning(f'Unmatched synonym: {val}')
+
+                elif key == 'alt_id':
+                    val = val.replace('DOID', 'DO').strip()
+                    term['alt_ids'].append(val)
+
+                elif key == 'is_a':
+                    matches = re.match('DOID:(\d+)\s', val)
+                    if matches:
+                        parent_id = matches.group(1)
+                        term['parents'].append(f'DO:{parent_id}')
+
+                elif key == 'xref':
+                    matches = re.match('(\w+):(\w+)\s*', val)
+                    if matches:
+                        ns = matches.group(1)
+                        nsval = matches.group(2)
+                        if 'UMLS_CUI' in ns:
+                            term['equivalences'].append(f'UMLS:{nsval}')
+                        elif 'SNOMED' in ns:
+                            term['equivalences'].append(f'SNOMEDCT:{nsval}')
+                        elif 'NCI' in ns:
+                            term['equivalences'].append(f'NCI:{nsval}')
+                        elif 'MESH' == ns:
+                            term['equivalences'].append(f'MESH:{nsval}')
+                        elif 'ICD10CM' in ns:
+                            term['equivalences'].append(f'ICD10:{nsval}')
 
 
 def main():

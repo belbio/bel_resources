@@ -160,7 +160,7 @@ def process_obo(force: bool = False):
                         continue
 
                 elif key == 'def':
-                    term['description'] == val
+                    term['description'] = val
 
                 elif key == 'synonym':
                     matches = re.search('\"(.*?)\"', val)
