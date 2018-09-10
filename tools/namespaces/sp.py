@@ -23,6 +23,8 @@ import tools.setup_logging
 import structlog
 log = structlog.getLogger(__name__)
 
+# NOTES: http://arep.med.harvard.edu/labgc/jong/Fetch/SwissProtAll.html
+
 # Globals
 namespace_key = 'sp'
 namespace_def = utils.get_namespace(namespace_key, config)
@@ -57,6 +59,7 @@ with gzip.open(species_labels_fn, 'r') as fi:
 terms_fp = f'{data_fp}/namespaces/{namespace_key}.jsonl.gz'
 terms_hmrz_fp = f'{data_fp}/namespaces/{namespace_key}_hmrz.jsonl.gz'  # Human, mouse, rat and zebrafish subset
 hmrz_species = ['TAX:9606', 'TAX:10090', 'TAX:10116', 'TAX:7955']
+
 
 def get_metadata():
     # Setup metadata info - mostly captured from namespace definition file which
@@ -205,16 +208,16 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
             log.debug(f'DE AltName Key: {key}  Val: {val}')
 
     if not name:
-        name = accessions[0]
+        name = sp_id
 
     if not full_name:
         full_name = "Not available"
 
     term = {
         'namespace': ns_prefix,
-        'namespace_value': accessions[0],
-        'src_id': accessions[0],
-        'id': utils.get_prefixed_id(ns_prefix, accessions[0]),
+        'namespace_value': sp_id,
+        'src_id': sp_id,
+        'id': utils.get_prefixed_id(ns_prefix, sp_id),
         'label': name,
         'name': name,
         'description': full_name,
@@ -223,13 +226,16 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
         'entity_types': ['Gene', 'RNA', 'Protein'],
         'synonyms': copy.copy(synonyms),
         'equivalences': copy.copy(equivalences),
+        'alt_ids': [],
+        'obsolete_ids': [],
     }
 
-    alt_ids = []
-    for alt_id in accessions[1:] + [sp_id]:
-        alt_ids.append(utils.get_prefixed_id(ns_prefix, alt_id))
+    for alt_id in [accessions[0]]:
+        term['alt_ids'].append(utils.get_prefixed_id(ns_prefix, alt_id))
 
-    term['alt_ids'] = copy.copy(alt_ids)
+    # Obsolete IDs
+    for obs_id in accessions[1:]:
+        term['obsolete_ids'].append(utils.get_prefixed_id(ns_prefix, obs_id))
 
     log.debug('Term:\n', json.dumps(term, indent=4))
     return term
