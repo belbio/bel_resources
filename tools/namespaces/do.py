@@ -192,8 +192,8 @@ def process_obo(force: bool = False):
                             term['equivalences'].append(f'NCI:{nsval}')
                         elif 'MESH' == ns:
                             term['equivalences'].append(f'MESH:{nsval}')
-                        elif 'ICD10CM' in ns:
-                            term['equivalences'].append(f'ICD10:{nsval}')
+                        elif 'ICD' in ns:
+                            continue
 
 
 def main():
