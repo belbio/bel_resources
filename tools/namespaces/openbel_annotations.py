@@ -149,8 +149,11 @@ def build_json(annofiles):
                         "label": val,
                         "name": val,
                         "annotation_types": [annotation_type],
+                        "entity_types": [],
                         "alt_ids": [vid]
                     }
+                    if annotation_type == 'Cell':
+                        term['entity_types'].append(annotation_type)
                     terms.append(copy.deepcopy(term))
 
             with gzip.open(terms_filename, 'wt') as fo:

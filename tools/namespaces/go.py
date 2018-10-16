@@ -35,6 +35,8 @@ ns_prefix = namespace_def['namespace']
 
 url = 'http://purl.obolibrary.org/obo/go.obo'
 
+complex_parent_id = 'GO:0032991'
+
 # Local data filepath setup
 basename = os.path.basename(url)
 
@@ -78,6 +80,25 @@ def update_data_files() -> bool:
     return changed_flag
 
 
+def check_parents(check_id, test_parent_id, parent_ids, debug: bool = False):
+    """Check to see if parent_id is a parent of check_id"""
+
+    if check_id in parent_ids:
+
+        if debug:
+            print('Check id', check_id)
+        for parent_id in parent_ids[check_id]:
+            result = check_parents(parent_id, test_parent_id, parent_ids)
+            if debug:
+                print('Parent ID', parent_id)
+            if result is True:
+                return result
+            elif test_parent_id == parent_id:
+                return True
+            else:
+                return False
+
+
 def process_obo(force: bool = False):
 
     # Terminology JSONL output filename
@@ -89,6 +110,25 @@ def process_obo(force: bool = False):
         if utils.file_newer(terms_fp, local_data_fp):
             log.info('Will not rebuild data file as it is newer than downloaded source file')
             return False
+
+    # collect parents/hierarchy
+    parent_ids = {}
+    with gzip.open(local_data_fp, 'rt') as fi:
+        id_re = re.compile('id:\s+(\S+)\s*')
+        isa_re = re.compile('is_a:\s+(\S+)\s')
+
+        for line in fi:
+            id_match = id_re.match(line)
+            isa_match = isa_re.match(line)
+            if id_match:
+                goid = id_match.group(1)
+            if isa_match:
+                isa_id = isa_match.group(1)
+                try:
+                    parent_ids[goid][isa_id] = 1
+                except Exception as e:
+                    parent_ids[goid] = {}
+                    parent_ids[goid][isa_id] = 1
 
     with gzip.open(local_data_fp, 'rt') as fi, gzip.open(terms_fp, 'wt') as fo:
 
@@ -145,6 +185,15 @@ def process_obo(force: bool = False):
                 if key == 'id':
                     term['src_id'] = val
 
+                    if term['src_id'] == 'GO:0071753':
+                        print('Checking ID')
+                        debug = True
+                    else:
+                        debug = False
+
+                    if check_parents(term['src_id'], complex_parent_id, parent_ids, debug):
+                        term['entity_types'].append('Complex')
+
                 elif key == 'name':
                     name_id = utils.get_prefixed_id(ns_prefix, val)
                     term['label'] = val
@@ -189,8 +238,6 @@ def process_obo(force: bool = False):
                     if matches:
                         parent_id = matches.group(1)
                         term['parents'].append(f'{parent_id}')
-                        if parent_id == 'GO:0032991':
-                            term['entity_types'] = ['Complex']
 
 
 def main():

@@ -154,6 +154,7 @@ def build_json(force: bool = False):
                 'alt_ids': [],
                 'taxonomy_names': [],
                 'annotation_types': [],
+                'entity_types': ['Species'],
             }
 
             # Add preferred label as alt_id
