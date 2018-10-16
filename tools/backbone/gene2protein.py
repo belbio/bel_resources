@@ -77,7 +77,7 @@ def process_backbone():
                 'citation': {'uri': f'{src_url}{src_id}'},
                 'assertions': assertions,
                 'annotations': [{'type': 'Species', 'id': species, 'label': species_label}],
-                'metadata': {"gd:published": True},
+                'metadata': {"gd:published": True, "nanopub_type": "backbone"},
             }
 
             if species in hmrz_species:
