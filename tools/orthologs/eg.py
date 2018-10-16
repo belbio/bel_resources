@@ -16,7 +16,6 @@ import gzip
 from tools.utils.Config import config
 import tools.utils.utils as utils
 
-import setup_logging
 import structlog
 log = structlog.getLogger(__name__)
 
