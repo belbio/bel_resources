@@ -205,8 +205,9 @@ def build_json(force: bool = False):
             if entity_types:
                 term['entity_types'] = copy.copy(entity_types)
 
+            # TODO - check that this is working correctly
             if gene_id in history:
-                term['obsolete_ids'] = history[gene_id].keys()
+                term['obsolete_ids'] = [f'EG:{obs_id}' for obs_id in history[gene_id].keys()]
 
             # Add term to JSONL
             fo.write("{}\n".format(json.dumps({'term': term})))

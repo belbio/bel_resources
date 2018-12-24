@@ -194,8 +194,8 @@ def build_json(force: bool = False):
 
             # Obsolete Namespace IDs
             if 'prev_symbol' in doc:
-                for prev_id in doc['prev_symbol']:
-                    term['obsolete_ids'].append(prev_id)
+                for obs_id in doc['prev_symbol']:
+                    term['obsolete_ids'].append(utils.get_prefixed_id(ns_prefix, obs_id))
 
             # Add term to JSONL
             fo.write("{}\n".format(json.dumps({'term': term})))
