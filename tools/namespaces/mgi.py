@@ -6,12 +6,10 @@ Usage:  mgi.py
 
 """
 
-import sys
 import os
 import tempfile
 import json
 import re
-import yaml
 import datetime
 import copy
 import gzip
@@ -19,7 +17,6 @@ import gzip
 import tools.utils.utils as utils
 from tools.utils.Config import config
 
-import tools.setup_logging
 import structlog
 log = structlog.getLogger(__name__)
 
@@ -168,6 +165,8 @@ def build_json(force: bool = False):
 
         for line in fi:
             cols = line.rstrip().split('\t')
+            if cols[2] == 'W':
+                continue
             (mgi_id, sp_accession) = (cols[0], cols[6])
             mgi_id = mgi_id.replace('MGI:', '')
             sp_eqv[mgi_id] = sp_accession.split(' ')
@@ -177,9 +176,14 @@ def build_json(force: bool = False):
 
         for line in fi:
             cols = line.split('\t')
+            if cols[2] == 'W':
+                continue
             (mgi_id, eg_id) = (cols[0], cols[8])
             mgi_id = mgi_id.replace('MGI:', '')
             eg_eqv[mgi_id] = [eg_id]
+
+            if mgi_id == 2139422 or mgi_id == '2139422':
+                print('Duox1 equivalents 1', eg_eqv[mgi_id], type(mgi_id), eg_id)
 
     with gzip.open(local_data_main_fp, 'rt') as fi, gzip.open(terms_fp, 'wt') as fo:
 
@@ -217,6 +221,9 @@ def build_json(force: bool = False):
                         continue
                     equivalences.append(f'SP:{sp_accession}')
             if mgi_id in eg_eqv:
+                if mgi_id == 2139422 or mgi_id == '2139422':
+                    print('Duox1 equivalents', eg_eqv[mgi_id], type(mgi_id))
+
                 for eg_id in eg_eqv[mgi_id]:
                     if not eg_id:
                         continue
