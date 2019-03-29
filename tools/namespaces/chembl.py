@@ -24,36 +24,41 @@ from tools.utils.Config import config
 
 import tools.setup_logging
 import structlog
+
 log = structlog.getLogger(__name__)
 
 # Globals
-namespace_key = 'chembl'
+namespace_key = "chembl"
 namespace_def = utils.get_namespace(namespace_key, config)
-ns_prefix = namespace_def['namespace']
+ns_prefix = namespace_def["namespace"]
 
-server = 'ftp.ebi.ac.uk'
-filename_regex = r'chembl_(.*?)_sqlite\.tar\.gz'
-server_directory = '/pub/databases/chembl/ChEMBLdb/latest/'
+server = "ftp.ebi.ac.uk"
+filename_regex = r"chembl_(.*?)_sqlite\.tar\.gz"
+server_directory = "/pub/databases/chembl/ChEMBLdb/latest/"
 
-#chembl_version = utils.get_chembl_version(filename_regex, server, server_directory, 1)
-chembl_version = '24'
+# chembl_version = utils.get_chembl_version(filename_regex, server, server_directory, 1)
+chembl_version = "25"
 
-source_data_fp = f'/pub/databases/chembl/ChEMBLdb/latest/chembl_{chembl_version}_sqlite.tar.gz'
+source_data_fp = f"/pub/databases/chembl/ChEMBLdb/latest/chembl_{chembl_version}_sqlite.tar.gz"
 
 # Local data filepath setup
 basename = os.path.basename(source_data_fp)
 
-if not re.search('.gz$', basename):  # we basically gzip everything retrieved that isn't already gzipped
-    basename = f'{basename}.gz'
+if not re.search(
+    ".gz$", basename
+):  # we basically gzip everything retrieved that isn't already gzipped
+    basename = f"{basename}.gz"
 
 local_data_fp = f'{config["bel_resources"]["file_locations"]["downloads"]}/{basename}'
 
-print("""
+print(
+    """
       This script requires MANUAL interaction to get latest chembl and untar it.
 
       Further, the 16Gb sqlite database for Chembl won't copy into the S3 Bucket (might be an s3fuse issue).
       This script has to be run outside of the BELResGen server.
-      """)
+      """
+)
 
 
 def get_metadata():
@@ -61,13 +66,13 @@ def get_metadata():
     # can be overridden in belbio_conf.yml file
     dt = datetime.datetime.now().replace(microsecond=0).isoformat()
     metadata = {
-        "name": namespace_def['namespace'],
+        "name": namespace_def["namespace"],
         "type": "namespace",
-        "namespace": namespace_def['namespace'],
-        "description": namespace_def['description'],
+        "namespace": namespace_def["namespace"],
+        "description": namespace_def["description"],
         "version": dt,
-        "src_url": namespace_def['src_url'],
-        "url_template": namespace_def['template_url'],
+        "src_url": namespace_def["src_url"],
+        "url_template": namespace_def["template_url"],
     }
 
     return metadata
@@ -86,15 +91,15 @@ def update_data_files() -> bool:
 
     # Notify admin if CHEMBL file is missing (e.g. they updated the CHEMBL version)
     if not result[0]:
-        mail_to = config['bel_api']['mail']['notify_email']
+        mail_to = config["bel_api"]["mail"]["notify_email"]
         subject = "Missing CHEMBL file"
         msg = f"Cannot find http://{server}/{source_data_fp} - please update BEL Resource Generator CHEMBL download script"
         result = utils.send_mail(mail_to, subject, msg)
-        log.info('Cannot find CHEMBL file to download')
+        log.info("Cannot find CHEMBL file to download")
         quit()
 
     changed = False
-    if 'Downloaded' in result[1]:
+    if "Downloaded" in result[1]:
         changed = True
 
     if changed:
@@ -115,8 +120,10 @@ def pref_name_dupes():
             molecule_dictionary
     """
 
-    db_filename = f'{config["bel_resources"]["file_locations"]["downloads"]}/' \
-                  f'chembl_{chembl_version}/chembl_{chembl_version}_sqlite/chembl_{chembl_version}.db'
+    db_filename = (
+        f'{config["bel_resources"]["file_locations"]["downloads"]}/'
+        f"chembl_{chembl_version}/chembl_{chembl_version}_sqlite/chembl_{chembl_version}.db"
+    )
 
     conn = sqlite3.connect(db_filename)
     conn.row_factory = sqlite3.Row
@@ -125,12 +132,14 @@ def pref_name_dupes():
     with conn:
         check_pref_term_uniqueness = {}
         for row in conn.execute(check_pref_term_sql):
-            pref_name = row['pref_name']
+            pref_name = row["pref_name"]
             if pref_name:
                 pref_name = pref_name.lower()
-            chembl_id = row['chembl_id']
+            chembl_id = row["chembl_id"]
             if check_pref_term_uniqueness.get(pref_name, None):
-                log.error(f'CHEMBL pref_name used for multiple chembl_ids {chembl_id}, {check_pref_term_uniqueness["pref_name"]}')
+                log.error(
+                    f'CHEMBL pref_name used for multiple chembl_ids {chembl_id}, {check_pref_term_uniqueness["pref_name"]}'
+                )
                 dupes_flag = True
 
     return dupes_flag
@@ -138,10 +147,12 @@ def pref_name_dupes():
 
 def query_db() -> Iterable[Mapping[str, Any]]:
     """Generator to run chembl term queries using sqlite chembl db"""
-    log.error('This script requires MANUAL interaction to get latest chembl and untar it.')
+    log.error("This script requires MANUAL interaction to get latest chembl and untar it.")
 
-    db_filename = f'{config["bel_resources"]["file_locations"]["downloads"]}/' \
-                  f'chembl_{chembl_version}/chembl_{chembl_version}_sqlite/chembl_{chembl_version}.db'
+    db_filename = (
+        f'{config["bel_resources"]["file_locations"]["downloads"]}/'
+        f"chembl_{chembl_version}/chembl_{chembl_version}_sqlite/chembl_{chembl_version}.db"
+    )
 
     conn = sqlite3.connect(db_filename)
     conn.row_factory = sqlite3.Row
@@ -161,15 +172,15 @@ def query_db() -> Iterable[Mapping[str, Any]]:
     with conn:
         for row in conn.execute(main_sql):
 
-            chembl_id = row['chembl_id'].replace('CHEMBL', 'CHEMBL:')
-            src_id = row['chembl_id'].replace('CHEMBL', '')
-            syns = row['syns']
+            chembl_id = row["chembl_id"].replace("CHEMBL", "CHEMBL:")
+            src_id = row["chembl_id"].replace("CHEMBL", "")
+            syns = row["syns"]
             if syns:
-                syns = syns.lower().split('||')
+                syns = syns.lower().split("||")
             else:
                 syns = []
 
-            pref_name = row['pref_name']
+            pref_name = row["pref_name"]
             alt_ids = []
             namespace_value = src_id
 
@@ -193,10 +204,10 @@ def query_db() -> Iterable[Mapping[str, Any]]:
                 "alt_ids": alt_ids,
                 "syns": copy.copy(syns),
             }
-            if row['standard_inchi_key']:
-                term['inchi_key'] = f'INCHIKEY:{row["standard_inchi_key"]}'
-            if row['chebi_par_id']:
-                term['chebi_id'] = f"CHEBI:{row['chebi_par_id']}"
+            if row["standard_inchi_key"]:
+                term["inchi_key"] = f'INCHIKEY:{row["standard_inchi_key"]}'
+            if row["chebi_par_id"]:
+                term["chebi_id"] = f"CHEBI:{row['chebi_par_id']}"
 
             yield term
 
@@ -216,41 +227,41 @@ def build_json(force: bool = False):
 
     # Terminology JSONL output filename
     data_fp = config["bel_resources"]["file_locations"]["data"]
-    terms_fp = f'{data_fp}/namespaces/{namespace_key}.jsonl.gz'
+    terms_fp = f"{data_fp}/namespaces/{namespace_key}.jsonl.gz"
 
     # Don't rebuild file if it's newer than downloaded source file
     if not force:
         if utils.file_newer(terms_fp, local_data_fp):
-            log.warning('Will not rebuild data file as it is newer than downloaded source files')
+            log.warning("Will not rebuild data file as it is newer than downloaded source files")
             return False
 
     with gzip.open(terms_fp, mode="wt") as fo:
 
         # Header JSONL record for terminology
         metadata = get_metadata()
-        fo.write("{}\n".format(json.dumps({'metadata': metadata})))
+        fo.write("{}\n".format(json.dumps({"metadata": metadata})))
 
         for row in query_db():
 
             term = {
-                'namespace': ns_prefix,
-                'namespace_value': row['namespace_value'],
-                'src_id': row['src_id'],
-                'id': row['chembl_id'],
-                'alt_ids': row['alt_ids'],
-                'label': row['name'],
-                'name': row['name'],
-                'synonyms': copy.copy(list(set(row['syns']))),
-                'entity_types': ['Abundance'],
-                'equivalences': [],
+                "namespace": ns_prefix,
+                "namespace_value": row["namespace_value"],
+                "src_id": row["src_id"],
+                "id": row["chembl_id"],
+                "alt_ids": row["alt_ids"],
+                "label": row["name"],
+                "name": row["name"],
+                "synonyms": copy.copy(list(set(row["syns"]))),
+                "entity_types": ["Abundance"],
+                "equivalences": [],
             }
-            if row.get('chebi_id', None):
-                term['equivalences'].append(row['chebi_id'])
-            if row.get('inchi_key', None):
-                term['equivalences'].append(row['inchi_key'])
+            if row.get("chebi_id", None):
+                term["equivalences"].append(row["chebi_id"])
+            if row.get("inchi_key", None):
+                term["equivalences"].append(row["inchi_key"])
 
             # Add term to JSONL
-            fo.write("{}\n".format(json.dumps({'term': term})))
+            fo.write("{}\n".format(json.dumps({"term": term})))
 
 
 def main():
@@ -265,5 +276,5 @@ def main():
     build_json()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
