@@ -161,7 +161,9 @@ def process_types(mesh_id, mns, sts):
             if re.match("A11.284", mn):
                 entity_types.add("Location")
                 annotation_types.add("CellStructure")
-            if re.match("C|F", mn):  # Original OpenBEL was C|F03 - Charles Hoyt suggested C|F
+            if re.match(
+                "C|F03", mn
+            ):  # Original OpenBEL was C|F03 - Charles Hoyt suggested C|F Natalie overrode that
                 annotation_types.add("Disease")
                 entity_types.add("Pathology")
             if re.match("G", mn) and not re.match("G01|G15|G17", mn):
