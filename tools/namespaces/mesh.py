@@ -168,6 +168,8 @@ def process_types(mesh_id, mns, sts):
                 entity_types.add("Pathology")
             if re.match("G", mn) and not re.match("G01|G15|G17", mn):
                 entity_types.add("BiologicalProcess")
+            if re.match("F", mn) and not re.match("F03", mn):
+                entity_types.add("BiologicalProcess")
             if re.match("D", mn):
                 entity_types.add("Abundance")
             if re.match("J02", mn):
