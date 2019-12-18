@@ -35,7 +35,7 @@ dt = datetime.datetime.now().replace(microsecond=0).isoformat()
 
 # TODO - figure out more robust way to handle this
 # year = datetime.date.today().year
-year = "2019"  # NLM increments the year by mid-Nov
+year = "2020"  # NLM increments the year by mid-Nov
 
 # TODO - figure out how to add the children attributes - complicated by the fact that only
 #        some terms are used and not others and terms have multiple locations on DAG
