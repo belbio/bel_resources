@@ -1,9 +1,12 @@
-[[source]]
-url = "https://pypi.org/simple"
-verify_ssl = true
-name = "pypi"
+[tool.poetry]
+name = "bel_resources"
+version = "0.2.0"
+description = "BEL Resource Generator - namespaces, orthologies, etc"
+authors = ["William Hayes <william.s.hayes@gmail.com>"]
+license = "Apache-2.0"
 
-[packages]
+[tool.poetry.dependencies]
+python = "^3.7"
 bel = "*"
 certifi = "*"
 chardet = "*"
@@ -19,7 +22,6 @@ pytest-flakes = "*"
 pytest-mypy = "*"
 "pytest-pep8" = "*"
 pytest-sugar = "*"
-python-arango = "*"
 python-json-logger = "*"
 python-dateutil = "*"
 requests = "*"
@@ -29,13 +31,10 @@ timy = "*"
 tornado = "*"
 "urllib3" = "*"
 PyYAML = "*"
+python-arango = "^4.4"
 
-[dev-packages]
-releases = "*"
-Sphinx = "*"
-sphinx-autobuild = "*"
-sphinx-autodoc-typehints = "*"
-sphinxcontrib-gravatar = "*"
+[tool.poetry.dev-dependencies]
 
-[requires]
-python_version = "3.6"
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
