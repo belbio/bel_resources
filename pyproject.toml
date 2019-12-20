@@ -32,6 +32,8 @@ tornado = "*"
 "urllib3" = "*"
 PyYAML = "*"
 python-arango = "^4.4"
+python-dotenv = "^0.10.3"
+flake8 = "^3.7.9"
 
 [tool.poetry.dev-dependencies]
 

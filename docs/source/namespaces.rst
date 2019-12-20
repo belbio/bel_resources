@@ -26,15 +26,15 @@ Processing Overview
    3. Namespace script writes out each term into a gzipped
       `JSONL <http://jsonlines.org>`__ file using the terminology schema
 
+TODO: Add instructions on how to load namespaces and orthologies
+
 2. Load namespaces into Elasticsearch
 
   1. After setting up Elasticsearch index
-  2. Run `tools/load/load_elasticsearch.py -a`
 
 3. Load equivalence files
 
   1. Generate equivalence files to load into ArangoDB from <term>.jsonl.gz files
-  2. Load equivalence files into ArangoDB using `tools/load/load_arango.py`
 
 5. Run Orthology scripts in tools/orthologs
 
@@ -45,7 +45,7 @@ Processing Overview
 
   2. Orthology script then processes the original source files to create the orthologous relationships
   3. Orthology script writes out each orthology into a gzipped `JSONL <http://jsonlines.org>`__ file using the orthologs schema
-  4. Load orthology datasets into ArangoDB using `tools/load/load_arango.py`
+
 
 Namespace Scripts
 -------------------
