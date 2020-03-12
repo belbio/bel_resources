@@ -54,9 +54,6 @@ local_data_fp = f"{settings.DOWNLOAD_DIR}/{basename}"
 print(
     """
       This script requires MANUAL interaction to get latest chembl and untar it.
-
-      Further, the 16Gb sqlite database for Chembl won't copy into the S3 Bucket (might be an s3fuse issue).
-      This script has to be run outside of the BELResGen server.
       """
 )
 
@@ -77,37 +74,6 @@ def get_metadata():
 
     return metadata
 
-
-def update_data_files() -> bool:
-    """ Download data files if needed
-
-    Args:
-        None
-    Returns:
-        bool: files updated = True, False if not
-    """
-
-    result = utils.get_ftp_file(server, source_data_fp, local_data_fp, days_old=380)
-
-    # Notify admin if CHEMBL file is missing (e.g. they updated the CHEMBL version)
-    if not result[0]:
-        mail_to = settings.MAIL_NOTIFY_EMAIL
-        subject = "Missing CHEMBL file"
-        msg = f"Cannot find http://{server}/{source_data_fp} - please update BEL Resource Generator CHEMBL download script"
-        result = utils.send_mail(mail_to, subject, msg)
-        log.info("Cannot find CHEMBL file to download")
-        quit()
-
-    changed = False
-    if "Downloaded" in result[1]:
-        changed = True
-
-    if changed:
-        tar = tarfile.open(local_data_fp)
-        tar.extractall()
-        tar.close()
-
-    return changed
 
 
 def pref_name_dupes():
@@ -265,10 +231,6 @@ def build_json(force: bool = False):
 
 
 def main():
-
-    # Cannot detect changes as ftp server doesn't support MLSD cmd
-
-    # update_data_files()
 
     if pref_name_dupes():
         quit()
