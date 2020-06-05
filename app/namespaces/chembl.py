@@ -37,7 +37,7 @@ filename_regex = r"chembl_(.*?)_sqlite\.tar\.gz"
 server_directory = "/pub/databases/chembl/ChEMBLdb/latest/"
 
 # chembl_version = utils.get_chembl_version(filename_regex, server, server_directory, 1)
-chembl_version = "26"
+chembl_version = "27"
 
 source_data_fp = f"/pub/databases/chembl/ChEMBLdb/latest/chembl_{chembl_version}_sqlite.tar.gz"
 
