@@ -6,21 +6,21 @@ Usage:  swissprot.py
 
 """
 
-import re
-import os
-import tempfile
-import json
-import yaml
-import datetime
 import copy
+import datetime
 import gzip
-from typing import List, Mapping, Any
+import json
+import os
+import re
+import tempfile
+from typing import Any, List, Mapping
 
-import app.utils as utils
-import app.settings as settings
-
-import app.setup_logging
 import structlog
+import yaml
+
+import app.settings as settings
+import app.setup_logging
+import app.utils as utils
 
 log = structlog.getLogger(__name__)
 
@@ -30,6 +30,9 @@ log = structlog.getLogger(__name__)
 namespace_key = "sp"
 namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_key]
 ns_prefix = namespace_def["namespace"]
+
+model_org_prefixes = ["HGNC", "MGI", "RGD", "ZFIN"]
+model_org_prefix_list = "|".join(model_org_prefixes)
 
 terms_fp = f"../data/terms/{namespace_key}.jsonl.gz"
 tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
@@ -185,6 +188,25 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
         log.debug(f"Syns: {synonyms}")
         if not name:
             name = orfnames[0]
+
+    # Equivalence processing
+    #    Remove EG ID's if HGNC/MGI/RGD or other model organism database IDs
+    #    We do this because some SP have multiple EG IDs - we want to remove readthrough entries
+    #        and resolve SP IFNA1_Human to EG:3439!IFNA1 instead of EG:3447!IFNA13
+    #    Protocol therefore is:
+    #        1. Check if model org ID exists
+    #        2. If so, take first model org ID from sorted list
+    #        3. Else take first EG ID from sorted list
+
+    equivalences.sort()
+
+    eg_equivalences = [e for e in equivalences if e.startswith("EG")]
+    if len(eg_equivalences) > 1:
+        model_org_equivalences = [e for e in equivalences if re.match(model_org_prefix_list, e)]
+        if len(model_org_equivalences) >= 1:
+            equivalences = [model_org_equivalences[0]]
+        else:
+            equivalences = [eg_equivalences[0]]
 
     # DE - name processing
     log.debug(f"DE {de}")
