@@ -12,7 +12,10 @@
         "titleBar.inactiveForeground": "#15202b99",
         "statusBar.background": "#35e12d",
         "statusBarItem.hoverBackground": "#23c01b",
-        "statusBar.foreground": "#15202b"
+        "statusBar.foreground": "#15202b",
+        "activityBar.activeBackground": "#60e75a",
+        "statusBar.border": "#35e12d",
+        "titleBar.border": "#35e12d"
     },
     "peacock.remoteColor": "#35e12d",
     "python.pythonPath": ".venv/bin/python",

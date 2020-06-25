@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Usage:  swissprot.py
+Usage:  sp.py
 
 """
 
@@ -12,7 +12,6 @@ import gzip
 import json
 import os
 import re
-import tempfile
 from typing import Any, List, Mapping
 
 import structlog
@@ -20,93 +19,37 @@ import yaml
 
 import app.settings as settings
 import app.setup_logging
-import app.utils as utils
+import typer
+from app.common.collect_sources import get_ftp_file
+from app.common.resources import get_metadata, get_species_labels
+from app.common.text import quote_id
+from app.schemas.main import Term
+from typer import Option
 
 log = structlog.getLogger(__name__)
 
-# NOTES: http://arep.med.harvard.edu/labgc/jong/Fetch/SwissProtAll.html
-
-# Globals
-namespace_key = "sp"
-namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_key]
-ns_prefix = namespace_def["namespace"]
-
-model_org_prefixes = ["HGNC", "MGI", "RGD", "ZFIN"]
-model_org_prefix_list = "|".join(model_org_prefixes)
-
-terms_fp = f"../data/terms/{namespace_key}.jsonl.gz"
-tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
-dt = datetime.datetime.now().replace(microsecond=0).isoformat()
-
 # file documentation:  http://web.expasy.org/docs/userman.html
 # 500Mb ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz
-# 50Gb ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.dat.gz
+# 112Gb ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_trembl.dat.gz
 
-server = "ftp.uniprot.org"
-source_data_fp = (
-    "/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz"
-)
 
-# Local data filepath setup
-basename = os.path.basename(source_data_fp)
+# Globals
 
-# we basically gzip everything retrieved that isn't already gzipped
-if not re.search(".gz$", basename):
-    basename = f"{basename}.gz"
+namespace = "SP"
+namespace_lc = namespace.lower()
+namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_lc]
 
-local_data_fp = f"{settings.DOWNLOAD_DIR}/{namespace_key}_{basename}"
-
-data_fp = settings.DATA_DIR
-species_labels_fn = f"{data_fp}/namespaces/tax_labels.json.gz"
-with gzip.open(species_labels_fn, "r") as fi:
-    species_label = json.load(fi)
-
-# Terminology JSONL output filename
-terms_fp = f"{data_fp}/namespaces/{namespace_key}.jsonl.gz"
-terms_hmrz_fp = (
-    f"{data_fp}/namespaces/{namespace_key}_hmrz.jsonl.gz"  # Human, mouse, rat and zebrafish subset
-)
+download_url = "ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz"
+download_fn = f"{settings.DOWNLOAD_DIR}/sp_uniprot_sprot.dat.gz"
+resource_fn = f"{settings.DATA_DIR}/namespaces/{namespace_lc}.jsonl.gz"
+resource_fn_hmrz = f"{settings.DATA_DIR}/namespaces/{namespace_lc}_hmrz.jsonl.gz"
 hmrz_species = ["TAX:9606", "TAX:10090", "TAX:10116", "TAX:7955"]
 
+species_labels = get_species_labels()
+model_org_prefixes = ["HGNC", "MGI", "RGD", "ZFIN"]
+model_org_prefix_str = "|".join(model_org_prefixes)
 
-def get_metadata():
-    # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yml file
-    dt = datetime.datetime.now().replace(microsecond=0).isoformat()
-    metadata = {
-        "name": namespace_def["namespace"],
-        "type": "namespace",
-        "namespace": namespace_def["namespace"],
-        "description": namespace_def["description"],
-        "version": dt,
-        "src_url": namespace_def["src_url"],
-        "url_template": namespace_def["template_url"],
-    }
-
-    return metadata
-
-
-def update_data_files() -> bool:
-    """ Download data files if needed
-
-    Args:
-        None
-    Returns:
-        bool: files updated = True, False if not
-    """
-
-    result = utils.get_ftp_file(
-        server, source_data_fp, local_data_fp, days_old=settings.UPDATE_CYCLE_DAYS
-    )
-
-    changed = False
-    if "Downloaded" in result[1]:
-        changed = True
-
-    return changed
-
-
-def process_record(record: List[str]) -> Mapping[str, Any]:
+def process_record(record: List[str]) -> Term:
     """Process SwissProt Dat file record
 
     Args:
@@ -126,7 +69,7 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
         # Get ID
         match = re.match("^ID\s+(\w+);?", line)
         if match:
-            sp_id = match.group(1)
+            entry_name = match.group(1)
 
         # Get accessions
         if re.match("^AC", line):
@@ -138,8 +81,8 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
         # Get Taxonomy ID
         match = re.match("^OX\s+NCBI_TaxID=(\d+)", line)
         if match:
-            tax_src_id = match.group(1)
-            tax_id = f"TAX:{tax_src_id}"
+            species_id = match.group(1)
+            species_key = f"TAX:{species_id}"
 
         # Get Equivalences
         match = re.match("^DR\s+(\w+);\s(\w+);\s([\w\-]+)\.", line)
@@ -166,26 +109,22 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
     synonyms = []
     name = None
     full_name = None
+    
     # GN - gene names processing
-    log.debug(f"AC: {accessions[0]}")
-    log.debug(f"GN {gn}")
     gn = re.sub(" {.*?}", "", gn, flags=re.S)
     match = re.search("Name=(.*?)[;{]+", gn)
     if match:
         name = match.group(1)
-        log.debug(f"Gene_name {name}")
     match = re.search("Synonyms=(.*?);", gn)
     if match:
         syns = match.group(1)
         synonyms.extend(syns.split(", "))
-        log.debug(f"Syns: {synonyms}")
 
     match = re.search("ORFNames=(.*?);", gn)
     if match:
         syns = match.group(1)
         orfnames = syns.split(", ")
         synonyms.extend(orfnames)
-        log.debug(f"Syns: {synonyms}")
         if not name:
             name = orfnames[0]
 
@@ -202,7 +141,7 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
 
     eg_equivalences = [e for e in equivalences if e.startswith("EG")]
     if len(eg_equivalences) > 1:
-        model_org_equivalences = [e for e in equivalences if re.match(model_org_prefix_list, e)]
+        model_org_equivalences = [e for e in equivalences if re.match(model_org_prefix_str, e)]
         if len(model_org_equivalences) >= 1:
             equivalences = [model_org_equivalences[0]]
         else:
@@ -235,87 +174,71 @@ def process_record(record: List[str]) -> Mapping[str, Any]:
             log.debug(f"DE AltName Key: {key}  Val: {val}")
 
     if not name:
-        name = sp_id
+        name = entry_name
 
-    if not full_name:
-        full_name = "Not available"
+    term = Term(
+        key=f"{namespace}:{accessions[0]}",
+        namespace=namespace,
+        id=accessions[0],
+        label=name,
+        name=name,
+        species_key=species_key,
+        species_label=species_labels.get(species_key, ""),
+        entity_types=["Gene", "RNA", "Protein"],
+        synonyms=copy.copy(synonyms),
+        equivalence_keys=copy.copy(equivalences),
+        alt_keys=[f"{namespace}:{entry_name}"],
+        obsolete_keys=[],
+    )
 
-    term = {
-        "namespace": ns_prefix,
-        "namespace_value": sp_id,
-        "src_id": sp_id,
-        "id": utils.get_prefixed_id(ns_prefix, sp_id),
-        "label": name,
-        "name": name,
-        "description": full_name,
-        "species_id": tax_id,
-        "species_label": species_label.get(tax_id, None),
-        "entity_types": ["Gene", "RNA", "Protein"],
-        "synonyms": copy.copy(synonyms),
-        "equivalences": copy.copy(equivalences),
-        "alt_ids": [],
-        "obsolete_ids": [],
-    }
-
-    for alt_id in [accessions[0]]:
-        term["alt_ids"].append(utils.get_prefixed_id(ns_prefix, alt_id))
+    if full_name:
+        term.description = full_name
 
     # Obsolete IDs
     for obs_id in accessions[1:]:
-        term["obsolete_ids"].append(utils.get_prefixed_id(ns_prefix, obs_id))
+        term.obsolete_keys.append(f"{namespace}:{obs_id}")
 
-    log.debug("Term:\n", json.dumps(term, indent=4))
     return term
 
 
-def build_json(force: bool = False):
-    """Build Swissprot namespace jsonl load file
+def build_json():
+    """Build Swissprot namespace jsonl load file"""
 
-    Args:
-        force (bool): build json result regardless of file mod dates
-
-    Returns:
-        None
-    """
-
-    # Don't rebuild file if it's newer than downloaded source file
-    if not force:
-        if utils.file_newer(terms_fp, local_data_fp):
-            return False
-
-    with gzip.open(local_data_fp, "rt") as fi, gzip.open(terms_fp, "wt") as fo:
+    with gzip.open(download_fn, "rt") as fi, gzip.open(resource_fn, "wt") as fo, gzip.open(
+        resource_fn_hmrz, "wt"
+    ) as fz:
 
         # Header JSONL record for terminology
-        metadata = get_metadata()
+        metadata = get_metadata(namespace_def)
         fo.write("{}\n".format(json.dumps({"metadata": metadata})))
 
         record = []
         for line in fi:
             record.append(line)
+
             if re.match("^//", line):
                 term = process_record(record)
-                fo.write("{}\n".format(json.dumps({"term": term})))
+
+                fo.write("{}\n".format(json.dumps({"term": term.dict()})))
+                if term.species_key in hmrz_species:
+                    fz.write("{}\n".format(json.dumps({"term": term.dict()})))
+
                 record = []
 
 
-def build_hmr_json():
-    """Extract Human, Mouse and Rat from EG into a new file """
+def main(
+    overwrite: bool = Option(False, help="Force overwrite of output resource data file"),
+    force_download: bool = Option(False, help="Force re-downloading of source data file"),
+):
 
-    with gzip.open(terms_fp, "rt") as fi, gzip.open(terms_hmrz_fp, "wt") as fo:
-        for line in fi:
-            doc = json.loads(line)
-            if "term" in doc and doc["term"]["species_id"] in hmrz_species:
-                fo.write("{}\n".format(json.dumps(doc)))
-            elif "metadata" in doc:
-                fo.write("{}\n".format(json.dumps(doc)))
+    (changed, msg) = get_ftp_file(download_url, download_fn, force_download=force_download)
 
+    if msg:
+        log.info("Collect download file", result=msg, changed=changed)
 
-def main():
-
-    update_data_files()
-    build_json()
-    build_hmr_json()
+    if changed or overwrite:
+        build_json()
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

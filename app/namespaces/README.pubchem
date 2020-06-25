@@ -1,8 +1,12 @@
+# Pubchem notes
 
+## TODO 
 
-## Data files
+    - this results in a 10Gb file of chemical entities - which is way too large to handle right now
+    - also - we should create a namespace entry for INCHIKEY:xxxx
+
+## Source Data files
 
 * ftp://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/
 ** ftp://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/CID-IUPAC.gz
 ** ftp://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/CID-Synonym-filtered.gz
-** 
