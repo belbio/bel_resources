@@ -28,7 +28,7 @@ from app.common.text import quote_id
 from app.schemas.main import Term
 from typer import Option
 
-log = structlog.getLogger(__name__)
+log = structlog.getLogger("CHANGEME_namespace")
 
 # Globals
 

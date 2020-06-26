@@ -26,7 +26,7 @@ from app.common.text import quote_id
 from app.schemas.main import Term
 from typer import Option
 
-log = structlog.getLogger(__name__)
+log = structlog.getLogger("sp_namespace")
 
 # file documentation:  http://web.expasy.org/docs/userman.html
 # 500Mb ftp://ftp.uniprot.org/pub/databases/uniprot/current_release/knowledgebase/complete/uniprot_sprot.dat.gz
@@ -109,7 +109,7 @@ def process_record(record: List[str]) -> Term:
     synonyms = []
     name = None
     full_name = None
-    
+
     # GN - gene names processing
     gn = re.sub(" {.*?}", "", gn, flags=re.S)
     match = re.search("Name=(.*?)[;{]+", gn)

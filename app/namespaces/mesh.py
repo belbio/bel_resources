@@ -33,7 +33,7 @@ from typer import Option
 # Tree example in MESH Browser ('MeSH Tree Structures' tab)
 # ftp://nlmpubs.nlm.nih.gov/online/mesh/MESH_FILES/meshtrees/mtrees2017.bin
 
-log = structlog.getLogger(__name__)
+log = structlog.getLogger("mesh_namespace")
 
 # Globals
 

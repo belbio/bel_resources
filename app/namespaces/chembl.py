@@ -30,7 +30,7 @@ from app.common.text import strip_quotes, quote_id
 from app.schemas.main import Term
 from typer import Option
 
-log = structlog.getLogger(__name__)
+log = structlog.getLogger("chembl_namespace")
 
 # Globals
 

@@ -25,8 +25,7 @@ from app.common.text import dt_now, quote_id
 from app.schemas.main import ResourceMetadata, Term
 from typer import Option
 
-log = structlog.getLogger("orthologs/eg")
-
+log = structlog.getLogger("eg_orthologs")
 
 namespace = "EG"
 namespace_lc = namespace.lower()
