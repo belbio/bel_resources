@@ -69,7 +69,7 @@ def build_json():
                 if term and term.id:
                     fo.write("{}\n".format(json.dumps({"term": term.dict()})))
 
-                term = Term(namespace=namespace, entity_types=["Abundance"])
+                term = None
 
             elif term and keyval_match:
                 key = keyval_match.group(1)

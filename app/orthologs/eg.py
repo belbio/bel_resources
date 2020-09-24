@@ -22,7 +22,7 @@ import typer
 from app.common.collect_sources import get_ftp_file
 from app.common.resources import get_metadata, get_species_labels
 from app.common.text import dt_now, quote_id
-from app.schemas.main import ResourceMetadata, Term
+from app.schemas.main import Orthologs, ResourceMetadata
 from typer import Option
 
 log = structlog.getLogger("eg_orthologs")
@@ -40,54 +40,65 @@ hmrz_species = ["TAX:9606", "TAX:10090", "TAX:10116", "TAX:7955"]
 
 
 orthologs_metadata = ResourceMetadata(
-    name="EntrezGene orthologs",
+    name="Orthologs_EntrezGene",
+    source_name="NCBI EntrezGene database",
     source_url=download_url,
-    type="orthologs",
+    resource_type="orthologs",
     description="Orthologs defined by EntrezGene",
     version=dt_now(),
-)
+).dict(skip_defaults=True)
 
 
 def build_json():
     """Build EG orthologs json load file"""
 
-    with gzip.open(download_fn, "rt") as fi, gzip.open(resource_fn, "wt") as fo, gzip.open(resource_fn_hmrz, "wt") as fz:
+    with gzip.open(download_fn, "rt") as fi, gzip.open(resource_fn, "wt") as fo, gzip.open(
+        resource_fn_hmrz, "wt"
+    ) as fz:
 
         # Header JSONL record for terminology
-        fo.write("{}\n".format(json.dumps({"metadata": orthologs_metadata.dict(skip_defaults=True)})))
+        fo.write("{}\n".format(json.dumps({"metadata": orthologs_metadata})))
+        fz.write("{}\n".format(json.dumps({"metadata": orthologs_metadata})))
 
         fi.__next__()  # skip header line
 
         for line in fi:
             (
-                subj_tax_id,
-                subj_gene_id,
+                subject_species_id,
+                subject_gene_id,
                 relationship,
-                obj_tax_id,
-                obj_gene_id,
+                object_species_id,
+                object_gene_id,
             ) = line.rstrip().split("\t")
             if relationship != "Ortholog":
                 continue
-        
-            subj_key
-            subj_species_key = f"TAX:{subj_tax_id}"
-            obj_species_key = f"TAX:{obj_tax_id}"
+
+            subject_species_key = f"TAX:{subject_species_id}"
+            object_species_key = f"TAX:{object_species_id}"
+
+            subject_key = f"{namespace}:{subject_gene_id}"
+            object_key = f"{namespace}:{object_gene_id}"
+
+            # Simple lexical sorting (e.g. not numerical) to ensure 1 entry per pair
+            if subject_key > object_key:
+                subject_key, subject_species_key, object_key, object_species_key = (
+                    object_key,
+                    object_species_key,
+                    subject_key,
+                    subject_species_key,
+                )
 
             ortholog = {
-                "subject": {
-                    "key": f"{namespace}:{subj_gene_id}",
-                    "tax_id": subj_species_key,
-                },
-                "object": {
-                    "key": f"{namespace}:{obj_gene_id}",
-                    "tax_id": obj_species_key",
-                },
+                "subject_key": subject_key,
+                "subject_species_key": subject_species_key,
+                "object_key": object_key,
+                "object_species_key": object_species_key,
             }
 
             # Add ortholog to JSONL
             fo.write("{}\n".format(json.dumps({"ortholog": ortholog})))
 
-            if subj_species_key in hmrz_species and obj_species_key in hmrz_species:
+            if subject_species_key in hmrz_species and object_species_key in hmrz_species:
                 fz.write("{}\n".format(json.dumps({"ortholog": ortholog})))
 
 

@@ -211,6 +211,7 @@ def build_json():
         # Header JSONL record for terminology
         metadata = get_metadata(namespace_def)
         fo.write("{}\n".format(json.dumps({"metadata": metadata})))
+        fz.write("{}\n".format(json.dumps({"metadata": metadata})))
 
         record = []
         for line in fi:

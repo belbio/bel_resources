@@ -113,12 +113,10 @@ def build_json():
                 id=hgnc_id,
                 label=doc["symbol"],
                 name=doc["name"],
+                alt_keys=[f"{namespace}:{doc['symbol']}"],
                 species_key=species_key,
                 species_label=species_labels[species_key],
             )
-
-            # "alt_ids": [utils.get_prefixed_id(ns_prefix, hgnc_id)],
-            term.alt_ids = [f"{namespace}:{doc['symbol']}"]
 
             # Synonyms
             term.synonyms.extend(doc.get("synonyms", []))

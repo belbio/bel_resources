@@ -14,6 +14,7 @@ import os
 import re
 import tarfile
 import tempfile
+import sys
 
 import structlog
 import yaml
@@ -50,9 +51,13 @@ def build_json():
 
     # Extract nodes.dmp file from tarfile
     tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
-    tar = tarfile.open(name=download_fn)
-    tar.extractall(path=tmpdir.name, members=None, numeric_owner=False)
-    tar.close()
+    try:
+        tar = tarfile.open(name=download_fn)
+        tar.extractall(path=tmpdir.name, members=None, numeric_owner=False)
+        tar.close()
+    except Exception as e:
+        print(f"Error trying to open tarfile: {str(e)}")
+        sys.exit(1)
 
     terms = {}
 
@@ -92,7 +97,6 @@ def build_json():
                 terms[id]["annotation_types"].append("Species")
                 terms[id]["entity_types"].append("Species")
 
-
     # Add labels
     with open(f"{tmpdir.name}/names.dmp", "r") as fi:
         for line in fi:
@@ -119,6 +123,7 @@ def build_json():
 
                 # Add name as alternate ID if scientific names and taxonomy rank is species
                 if terms[id]["taxonomy_rank"] == "species":
+                 
                     if not re.search("sp.", name):
                         terms[id]["alt_keys"].append(f"{namespace}:{quote_id(name)}")
 
@@ -129,6 +134,7 @@ def build_json():
         # Header JSONL record for terminology
         metadata = get_metadata(namespace_def)
         fo.write("{}\n".format(json.dumps({"metadata": metadata})))
+        fz.write("{}\n".format(json.dumps({"metadata": metadata})))
 
         for id in terms:
 

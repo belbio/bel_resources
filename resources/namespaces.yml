@@ -1,111 +1,273 @@
 # Official list of Namespace prefixes and source information
 ---
+#######################################################################################################
+## Complete namespaces #################################################################################
+#######################################################################################################
+
 hgnc:
+  name: Human Genes
   namespace: HGNC
+  description: Offical gene symbols for the human genome
+  source_name: Human Gene Nomenclature Committee
   source_url: http://www.genenames.org
+
+  namespace_type: complete
+
   template_url: http://www.genenames.org/cgi-bin/gene_symbol_report?hgnc_id=${id}
   example_url: http://www.genenames.org/cgi-bin/gene_symbol_report?hgnc_id=5
-  description: Human Gene Nomenclature Committee
 
 mgi:
+  name: Mouse Genes
   namespace: MGI
+  description: Mouse Genome Institute - official database for the mouse genome
+  source_name: Mouse Genome Institute
   source_url: http://www.informatics.jax.org/
+
+  namespace_type: complete
+
   template_url: http://www.informatics.jax.org/marker/${key}
   example_url: http://www.informatics.jax.org/marker/MGI:2152878
-  description: Mouse Genome Informatics
 
 rgd:
+  name: Rat Genes
   namespace: RGD
+  description: Rat Genome database - official database for the rat genome
+  source_name: Rat Genome Database
   source_url: http://rgd.mcw.edu/
+
+  namespace_type: complete
+
   template_url: http://rgd.mcw.edu/rgdweb/report/gene/main.html?id=${id}
   example_url: http://rgd.mcw.edu/rgdweb/report/gene/main.html?id=2081
-  description: Rat Genome Database
 
 eg:
+  name: EntrezGenes
   namespace: EG
+  description: EntrezGenes database - all genes with known sequences hosted by NCBI
+  source_name: NCBI EntrezGene
   source_url: https://www.ncbi.nlm.nih.gov/gene
+
+  namespace_type: complete
+
   template_url: https://www.ncbi.nlm.nih.gov/gene/${id}
   example_url: https://www.ncbi.nlm.nih.gov/gene/207
-  description: NCBI Entrez Gene DB
 
 sp:
+  name: Swissprot
   namespace: SP
+  description: Uniprot manually curated proteins
+  source_name: Swissprot
   source_url: http://www.uniprot.org/uniprot
-  template_url: http://www.uniprot.org/uniprot/${id}
-  description: UniprotKB/Swissprot
-  notes: |
-    This only includes Swissprot entries from UniProt.
-    The primary (first) accession ID is used as the canonical identifier.
-    Any additional accessions are added to the alt_ids listing.  The ID field
-    is added as an alt_id.
 
-up:
-  namespace: UP
-  source_url: http://www.uniprot.org/uniprot
+  namespace_type: complete
+
   template_url: http://www.uniprot.org/uniprot/${id}
-  description: UniprotKB/Swissprot
-  notes: |
-    This includes all entries from Uniprot.
-    The primary (first) accession ID is used as the canonical identifier.
-    Any additional accessions are added to the alt_ids listing.  The ID field
-    is added as an alt_id.
 
 chembl:
+  name: ChEMBL
   namespace: CHEMBL
+  description: |
+    hEMBL is a database of bioactive compounds, their quantitative properties and bioactivities 
+    (binding constants, pharmacology and ADMET, etc). The data is abstracted and curated from 
+    the primary scientific literature.
+  source_name: Chemistry EMBL database
   source_url: https://www.ebi.ac.uk/chembl/
+
+  namespace_type: complete
+
   template_url: https://www.ebi.ac.uk/chembl/compound/inspect/CHEMBL${id}
-  description: Chemistry EMBL database
 
 chebi:
+  name: Chemical Entities of Biological Interest
   namespace: CHEBI
-  source_url: https://www.ebi.ac.uk/chebi/
-  template_url: https://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:${id}
-  example_url: https://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:27732
   description: |
     Chemical Entities of Biological Interest - one star entries (non-curated) are
     filtered out. Obsolete records are also removed as they cannot be matched to
     current CHEBI entities.
+  source_name: Chemical Entities of Biological Interest
+  source_url: https://www.ebi.ac.uk/chebi/
 
-pubchem:
-  namespace: PUBCHEM
-  source_url: https://pubchem.ncbi.nlm.nih.gov/compound
-  template_url: https://pubchem.ncbi.nlm.nih.gov/compound/${id}
-  description: NCBI PubChem
+  namespace_type: complete
+
+  template_url: https://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:${id}
+  example_url: https://www.ebi.ac.uk/chebi/searchId.do?chebiId=CHEBI:27732
 
 go:
+  name: Gene Ontology
   namespace: GO
+  description: Gene Ontology - biological processes, cellular components and molecular functions
+  source_name: Gene Ontology Consortium
   source_url: http://www.geneontology.org/
-  # http://amigo.geneontology.org/amigo/term/GO:0043954  -- (W Hayes - like QuickGO better)
-  template_url: https://www.ebi.ac.uk/QuickGO/term/GO:${id}
-  description: Gene Ontology
 
-affy:
-  namespace: AFFY
-  source_url:
-  template_url:
-  description: Affymetrix
+  namespace_type: complete
+
+  template_url: https://www.ebi.ac.uk/QuickGO/term/GO:${id}
 
 tax:
+  name: NCBI Taxonomy
   namespace: TAX
-  source_url: https://www.ncbi.nlm.nih.gov/taxonomy
-  template_url: https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&lvl=3&lin=f&keep=1&srchmode=1&unlock&id=${id}
   description: NCBI Taxonomy Database
+  source_name: NCBI Taxonomy Database
+  source_url: https://www.ncbi.nlm.nih.gov/taxonomy
+
+  namespace_type: complete
+
+  template_url: https://www.ncbi.nlm.nih.gov/Taxonomy/Browser/wwwtax.cgi?mode=Info&lvl=3&lin=f&keep=1&srchmode=1&unlock&id=${id}
 
 mesh:
+  name: NLM Medical Subject Headings
   namespace: MESH
-  source_url: https://meshb.nlm.nih.gov
-  template_url: https://meshb.nlm.nih.gov/record/ui?ui=${id}
   description: Medical Subject Headings from US National Library of Medicine
+  source_name: National Library of Medicine, USA
+  source_url: https://meshb.nlm.nih.gov
+
+  namespace_type: complete
+
+  template_url: https://meshb.nlm.nih.gov/record/ui?ui=${id}
 
 do:
+  name: Disease Ontology
   namespace: DO
+  description: Disease Ontology
+  source_name: Disease Ontology
   source_url: http://www.disease-ontology.org/
+
+  namespace_type: complete
+
   template_url: http://www.ontobee.org/ontology/DOID?iri=http://purl.obolibrary.org/obo/DOID_${id}
   example_url: http://www.ontobee.org/ontology/DOID?iri=http://purl.obolibrary.org/obo/DOID_9351
-  description: Disease Ontology
+
+fma:
+  name: Foundational Model of Anatomy
+  namespace: FMA
+  description: Foundational Model of Anatomy
+  source_name: Foundational Model of Anatomy
+  source_url: http://www.si.washington.edu/projects/fma
+
+  namespace_type: complete
+
+  template_url: http://www.ontobee.org/ontology/FMA?iri=http://purl.obolibrary.org/obo/FMA_${id}
+  example_url: http://www.ontobee.org/ontology/FMA?iri=http://purl.obolibrary.org/obo/FMA_10000
 
 zfin:
+  name: Zebrafish Genes
   namespace: ZFIN
-  source_url: https://zfin.org
-  template_url: https://zfin.org/${id}
   description: Zebrafish Genome database
+  source_name: Zebrafish Genome Database
+  source_url: https://zfin.org
+
+  namespace_type: complete
+
+  template_url: https://zfin.org/${id}
+
+#######################################################################################################
+## Virtual namespaces #################################################################################
+#######################################################################################################
+
+up:
+  name: Uniprot
+  namespace: UP
+  description: All Uniprot proteins - manually curated (Swissprot) and automatically generated entries
+  source_name: UniProt
+  source_url: http://www.uniprot.org/uniprot
+
+  namespace_type: virtual
+
+  entity_types: ["Abundance"]
+
+  id_regex: ^([A-N,R-Z][0-9]([A-Z][A-Z, 0-9][A-Z, 0-9][0-9]){1,2})|([O,P,Q][0-9][A-Z, 0-9][A-Z, 0-9][A-Z, 0-9][0-9])(\.\d+)?$
+
+  example_url: http://www.uniprot.org/uniprot/P0DP23
+  template_url: http://www.uniprot.org/uniprot/${id}
+
+  identifiers_org: True
+  identifiers_org_namespace: uniprot
+
+tbd:
+  name: Placeholder
+  namespace: TBD
+  source_name: BELBio
+  source_url: https://bel.bio
+  namespace_type: virtual
+
+  description: |
+    Placeholder used in place of a namespace where you expect the namespace ID to be 
+    added to another namespace being used and you want this to be updated in the future.
+
+    BelBio will in the future support automatically updating TBD:<id> terms if there is a 
+    suitable match found in a namespace. The suitable match requires:
+
+    * a valid namespace
+    * match the new namespace term id or alternate id
+    * match in the entity or annotation types
+
+  annotation_types: ["All"]
+  entity_types: ["All"]
+
+pubchem:
+  name: PubChem
+  namespace: pubchem
+  description: PubChem namespace - compounds only not substances
+  source_name: NCBI Pubchem
+  source_url: https://pubchem.ncbi.nlm.nih.gov/compound
+
+  entity_types: ["Abundance"]
+
+  namespace_type: virtual
+
+  template_url: https://pubchem.ncbi.nlm.nih.gov/compound/${id}
+  id_regex: ^\d+$
+
+  identifiers_org: True
+  identifiers_org_namespace: pubchem.compound
+
+reactome:
+  name: Reactome
+  namespace: reactome
+  description: Reactome Namespace
+  source_name: Reactome
+  source_url: https://www.reactome.org/
+
+  entity_types: ["Complex", "Abundance", "Protein", "Gene", "RNA"]
+
+  namespace_type: virtual
+
+  template_url: https://reactome.org/content/detail/{$id}
+  id_regex: ^\d+$
+
+  identifiers_org: True
+  identifiers_org_namespace: reactome
+
+psimod:
+  name: PSI-MOD
+  namespace: PSIMOD
+  description: Protein Modification Ontology
+  source_name: Proteomics Standards Initiative
+  source_url: https://bioportal.bioontology.org/ontologies/PSIMOD
+
+  entity_types: ["ProteinModification"]
+
+  namespace_type: virtual
+
+  template_url: http://purl.obolibrary.org/obo/MOD_{$id}
+  id_regex: ^\d+$
+
+  identifiers_org: False
+
+inchikey:
+  name: InchiKey
+  namespace: inchikey
+  description: InchiKey identified compounds
+  source_name: ChemSpider
+  source_url: http://www.chemspider.com/
+
+  entity_types: ["Abundance"]
+
+  namespace_type: virtual
+
+  template_url: http://www.chemspider.com/inchikey={$id}
+  example_url: http://www.chemspider.com/inchikey=KDUIUFJBNGTBMD-YDEUHPLQSA-N
+  id_regex: ^[A-Z]{14}\-[A-Z]{10}(\-[A-Z])?
+
+  identifiers_org: True
+  identifiers_org_namespace: inchikey

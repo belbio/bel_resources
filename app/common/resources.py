@@ -4,10 +4,10 @@ import json
 
 import app.settings as settings
 from app.common.text import dt_now
-from app.schemas.main import ResourceMetadata, Term
+from app.schemas.main import Namespace, Term
 
 
-def get_metadata(namespace_def, version: str = None):
+def get_metadata(namespace_def, version: str = None) -> dict:
     """Get namespace metadata"""
 
     # Setup metadata info - mostly captured from namespace definition file which
@@ -16,38 +16,28 @@ def get_metadata(namespace_def, version: str = None):
     if not version:
         version = dt_now()
 
-    metadata = ResourceMetadata(
-        name=namespace_def["namespace"],
-        type="namespace",
+    metadata = Namespace(
+        name=namespace_def["name"],
         namespace=namespace_def["namespace"],
         description=namespace_def["description"],
+        resource_type="namespace",
+        namespace_type=namespace_def["namespace_type"],
         version=version,
+        source_name=namespace_def["source_name"],
         source_url=namespace_def["source_url"],
-        template_url=namespace_def["template_url"],
+        template_url=namespace_def.get("template_url", ""),
+        example_url=namespace_def.get("example_url", None),
+        identifiers_org=namespace_def.get("identifiers_org", False),
+        identifiers_org_namespace=namespace_def.get("identifiers_org_namespace", ""),
     )
 
-    return metadata.dict()
+    if namespace_def.get("entity_types", False):
+        metadata.entity_types = namespace_def["entity_types"]
 
+    if namespace_def.get("annotation_types", False):
+        metadata.annotation_types = namespace_def["annotation_types"]
 
-def get_orthologs_metadata(namespace_def, version: str = None):
-    """Get ortholgo metadata"""
-
-    # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yml file
-
-    if not version:
-        version = dt_now()
-
-    metadata = ResourceMetadata(
-        name=namespace_def["namespace"],
-        type="orthologs",
-        description=namespace_def["description"],
-        version=version,
-        source_url=namespace_def["src_url"],
-
-    )
-
-    return metadata.dict()
+    return metadata.dict(skip_defaults=True)
 
 
 def get_species_labels():
