@@ -42,7 +42,9 @@ species_key = "TAX:10090"
 # http://www.informatics.jax.org/downloads/reports/MRK_List1.rpt (including withdrawn marker symbols)
 # http://www.informatics.jax.org/downloads/reports/MRK_List2.rpt (excluding withdrawn marker symbols)
 download_url = "http://www.informatics.jax.org/downloads/reports/MRK_List2.rpt"
-download_url2 = "http://www.informatics.jax.org/downloads/reports/MRK_SwissProt.rpt"  # Equivalences
+download_url2 = (
+    "http://www.informatics.jax.org/downloads/reports/MRK_SwissProt.rpt"  # Equivalences
+)
 download_url3 = "http://www.informatics.jax.org/downloads/reports/MGI_EntrezGene.rpt"  # Equivalences
 
 download_fn = f"{settings.DOWNLOAD_DIR}/mgi_MRK_List2.rpt.gz"
@@ -176,7 +178,7 @@ def build_json():
                 species_key=species_key,
                 species_label=species_labels.get(species_key, ""),
                 entity_types=copy.copy(entity_types),
-                equivalences=copy.copy(equivalences),
+                equivalence_keys=copy.copy(equivalences),
             )
 
             if len(synonyms):
@@ -187,13 +189,23 @@ def build_json():
 
 
 def main(
-    overwrite: bool = Option(False, help="Force overwrite of output resource data file"),
-    force_download: bool = Option(False, help="Force re-downloading of source data file"),
+    overwrite: bool = Option(
+        False, help="Force overwrite of output resource data file"
+    ),
+    force_download: bool = Option(
+        False, help="Force re-downloading of source data file"
+    ),
 ):
 
-    (changed, msg) = get_web_file(download_url, download_fn, force_download=force_download)
-    (changed2, msg2) = get_web_file(download_url2, download_fn2, force_download=force_download)
-    (changed3, msg3) = get_web_file(download_url3, download_fn3, force_download=force_download)
+    (changed, msg) = get_web_file(
+        download_url, download_fn, force_download=force_download
+    )
+    (changed2, msg2) = get_web_file(
+        download_url2, download_fn2, force_download=force_download
+    )
+    (changed3, msg3) = get_web_file(
+        download_url3, download_fn3, force_download=force_download
+    )
 
     if msg:
         log.info("Collect download file", result=msg, changed=changed)

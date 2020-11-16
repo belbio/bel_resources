@@ -44,17 +44,17 @@ resource_fn = f"{settings.DATA_DIR}/namespaces/{namespace_lc}.jsonl.gz"
 complex_parent_id = "GO:0032991"
 
 
-def is_complex(check_id, parent_ids) -> bool:
-    """Check to see if parent_id is a parent of check_id"""
+def is_parent(check_id, target_parent_id, parent_ids) -> bool:
+    """Check to see if target_parent_id is a parent of check_id"""
 
     if check_id in parent_ids:
 
         for parent_id in parent_ids[check_id]:
-            result = is_complex(parent_id, parent_ids)
+            result = is_parent(parent_id, target_parent_id, parent_ids)
 
             if result is True:
                 return result
-            elif complex_parent_id == parent_id:
+            elif target_parent_id == parent_id:
                 return True
             else:
                 return False
@@ -116,8 +116,7 @@ def build_json():
                     term.id = val.replace("GO:", "")
                     term.key = f"{namespace}:{term.id}"
 
-                    if is_complex(term.key, parent_ids):
-                        # print("Adding complex entity type")
+                    if is_parent(term.key, complex_parent_id, parent_ids):
                         term.entity_types.append("Complex")
 
                 elif key == "name":
@@ -159,16 +158,23 @@ def build_json():
                         term.entity_types.append("BiologicalProcess")
                     elif "cellular_component" == val:
                         term.entity_types.append("Location")
+                        term.annotation_types.append("CellStructure")
                     elif "molecular_function" == val:
                         term.entity_types.append("Activity")
 
 
 def main(
-    overwrite: bool = Option(False, help="Force overwrite of output resource data file"),
-    force_download: bool = Option(False, help="Force re-downloading of source data file"),
+    overwrite: bool = Option(
+        False, help="Force overwrite of output resource data file"
+    ),
+    force_download: bool = Option(
+        False, help="Force re-downloading of source data file"
+    ),
 ):
 
-    (changed, msg) = get_web_file(download_url, download_fn, force_download=force_download)
+    (changed, msg) = get_web_file(
+        download_url, download_fn, force_download=force_download
+    )
 
     if msg:
         log.info("Collect download file", result=msg, changed=changed)

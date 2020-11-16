@@ -81,6 +81,8 @@ def build_json():
     metadata = get_metadata(namespace_def)
     history = get_history()
 
+    collect_prefixes = {}
+
     species_labels = get_species_labels()
 
     missing_entity_types = {}
@@ -97,9 +99,9 @@ def build_json():
         "rRNA": ["Gene", "RNA"],
     }
 
-    with gzip.open(download_fn, "rt") as fi, gzip.open(resource_fn, "wt") as fo, gzip.open(
-        resource_fn_hmrz, "wt"
-    ) as fz:
+    with gzip.open(download_fn, "rt") as fi, gzip.open(
+        resource_fn, "wt"
+    ) as fo, gzip.open(resource_fn_hmrz, "wt") as fz:
 
         # Header JSONL record for terminology
         metadata = get_metadata(namespace_def)
@@ -111,22 +113,46 @@ def build_json():
         for line in fi:
 
             cols = line.split("\t")
-            (tax_src_id, gene_id, symbol, synonyms, desc, gene_type, name) = (
+            (tax_src_id, gene_id, symbol, syns, dbxrefs, desc, gene_type, name) = (
                 cols[0],
                 cols[1],
                 cols[2],
                 cols[4],
+                cols[5],
                 cols[8],
                 cols[9],
                 cols[11],
             )
             species_key = f"TAX:{tax_src_id}"
 
-            synonyms = synonyms.rstrip()
-            if synonyms == "-":
-                synonyms = None
+            # Process synonyms
+            syns = syns.rstrip()
+            if syns:
+                synonyms = syns.split("|")
+
+            # Process equivalences
+            equivalence_keys = []
+            dbxrefs = dbxrefs.rstrip()
+            if dbxrefs == "-":
+                dbxrefs = None
             else:
-                synonyms = synonyms.split("|")
+                dbxrefs = dbxrefs.split("|")
+            if dbxrefs is not None:
+                for dbxref in dbxrefs:
+                    if "Ensembl:" in dbxref:
+                        equivalence_keys.append(dbxref)
+                    elif "MGI:MGI" in dbxref:
+                        dbxref.replace("MGI:MGI:", "MGI:")
+                        equivalence_keys.append(dbxref)
+                    elif "VGNC:VGNC:" in dbxref:
+                        dbxref.replace("VGNC:VGNC:", "VGNC:")
+                        equivalence_keys.append(dbxref)
+                    elif "HGNC:HGNC:" in dbxref:
+                        dbxref.replace("HGNC:HGNC:", "HGNC:")
+                        equivalence_keys.append(dbxref)
+                    else:
+                        (prefix, rest) = dbxref.split(":")
+                        collect_prefixes[prefix] = 1
 
             if gene_type in ["miscRNA", "biological-region"]:  # Skip gene types
                 continue
@@ -149,34 +175,43 @@ def build_json():
                 description=desc,
                 species_key=species_key,
                 species_label=species_labels.get(species_key, ""),
+                equivalence_keys=copy.copy(equivalence_keys),
+                synonyms=copy.copy(synonyms),
             )
-
-            if synonyms:
-                term.synonyms = copy.copy(synonyms)
 
             if entity_types:
                 term.entity_types = copy.copy(entity_types)
 
             # TODO - check that this is working correctly
             if gene_id in history:
-                term.obsolete_keys = [f"{namespace}:{obs_id}" for obs_id in history[gene_id].keys()]
+                term.obsolete_keys = [
+                    f"{namespace}:{obs_id}" for obs_id in history[gene_id].keys()
+                ]
 
             # Add term to JSONL
             fo.write("{}\n".format(json.dumps({"term": term.dict()})))
-            
+
             if species_key in hmrz_species:
                 fz.write("{}\n".format(json.dumps({"term": term.dict()})))
+
+    log.info(f"Equivalence Prefixes {json.dumps(collect_prefixes, indent=4)}")
 
     if missing_entity_types:
         log.error("Missing Entity Types:\n", json.dumps(missing_entity_types))
 
 
 def main(
-    overwrite: bool = Option(False, help="Force overwrite of output resource data file"),
-    force_download: bool = Option(False, help="Force re-downloading of source data file"),
+    overwrite: bool = Option(
+        False, help="Force overwrite of output resource data file"
+    ),
+    force_download: bool = Option(
+        False, help="Force re-downloading of source data file"
+    ),
 ):
 
-    (changed, msg) = get_ftp_file(download_url, download_fn, force_download=force_download)
+    (changed, msg) = get_ftp_file(
+        download_url, download_fn, force_download=force_download
+    )
     (changed_history, msg_history) = get_ftp_file(
         download_history_url, download_history_fn, force_download=force_download
     )

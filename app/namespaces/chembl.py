@@ -24,9 +24,9 @@ import yaml
 import app.settings as settings
 import app.setup_logging
 import typer
-from app.common.collect_sources import get_ftp_file, get_chembl_version
+from app.common.collect_sources import get_chembl_version, get_ftp_file
 from app.common.resources import get_metadata
-from app.common.text import strip_quotes, quote_id
+from app.common.text import quote_id, strip_quotes
 from app.schemas.main import Term
 from typer import Option
 
@@ -38,7 +38,9 @@ namespace = "CHEMBL"
 namespace_lc = namespace.lower()
 namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_lc]
 
-chembl_version = get_chembl_version("ftp://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest")
+chembl_version = get_chembl_version(
+    "ftp://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest"
+)
 
 download_url = f"ftp://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest/chembl_{chembl_version}_sqlite.tar.gz"
 download_fn = f"{settings.DOWNLOAD_DIR}/chembl_{chembl_version}_sqlite.tar.gz"
@@ -48,7 +50,9 @@ download_db_fn = f"{settings.DOWNLOAD_DIR}/chembl_{chembl_version}/chembl_{chemb
 
 def query_db() -> Iterable[Mapping[str, Any]]:
     """Generator to run chembl term queries using sqlite chembl db"""
-    log.error("This script requires MANUAL interaction to get latest chembl and untar it.")
+    log.error(
+        "This script requires MANUAL interaction to get latest chembl and untar it."
+    )
 
     db_filename = (
         f"{settings.DOWNLOAD_DIR}/"
@@ -123,34 +127,47 @@ def build_json():
         metadata = get_metadata(namespace_def)
         fo.write("{}\n".format(json.dumps({"metadata": metadata})))
 
-        for row in query_db():
+        for record in query_db():
+            key = f"{namespace}:{record['src_id']}"
+            if not record["pref_name"]:
+                name = key
+                label = ""
+            else:
+                name = record["pref_name"]
+                label = name
 
             term = Term(
-                key=f"{namespace}:{row['src_id']}",
+                key=key,
                 namespace=namespace,
-                id=row["src_id"],
-                alt_keys=row["alt_keys"],
-                label=row["name"],
-                name=row["name"],
-                synonyms=copy.copy(list(set(row["syns"]))),
+                id=record["src_id"],
+                alt_keys=record["alt_keys"],
+                label=label,
+                name=name,
+                synonyms=copy.copy(list(set(record["syns"]))),
                 entity_types=["Abundance"],
             )
 
-            if row.get("chebi_id", None):
-                term.equivalence_keys.append(row["chebi_id"])
-            if row.get("inchi_key", None):
-                term.equivalence_keys.append(row["inchi_key"])
+            if record.get("chebi_id", None):
+                term.equivalence_keys.append(record["chebi_id"])
+            if record.get("inchi_key", None):
+                term.equivalence_keys.append(record["inchi_key"])
 
             # Add term to JSONL
             fo.write("{}\n".format(json.dumps({"term": term.dict()})))
 
 
 def main(
-    overwrite: bool = Option(False, help="Force overwrite of output resource data file"),
-    force_download: bool = Option(False, help="Force re-downloading of source data file"),
+    overwrite: bool = Option(
+        False, help="Force overwrite of output resource data file"
+    ),
+    force_download: bool = Option(
+        False, help="Force re-downloading of source data file"
+    ),
 ):
 
-    (changed, msg) = get_ftp_file(download_url, download_fn, force_download=force_download)
+    (changed, msg) = get_ftp_file(
+        download_url, download_fn, force_download=force_download
+    )
 
     if msg:
         log.info("Collect download file", result=msg, changed=changed)
