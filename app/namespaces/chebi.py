@@ -5,103 +5,55 @@
 Usage:  chebi.py
 
 """
-
-import sys
-import re
-import os
-import tempfile
-import json
-import yaml
-import pronto
-import datetime
 import copy
+import datetime
 import gzip
-from typing import List, Mapping, Any, Iterable
+import json
+import os
+import re
+import sys
+import tempfile
+from typing import Any, Iterable, List, Mapping
 
-import app.utils as utils
-import app.settings as settings
-
-import app.setup_logging
 import structlog
+import yaml
 
-log = structlog.getLogger(__name__)
+import app.settings as settings
+import app.setup_logging
+import pronto
+import typer
+from app.common.collect_sources import get_ftp_file
+from app.common.resources import get_metadata
+from app.common.text import quote_id, strip_quotes
+from app.schemas.main import Term
+from typer import Option
 
-# Globals ###################################################################
-namespace_key = "chebi"  # namespace key into namespace definitions file
-namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_key]
-ns_prefix = namespace_def["namespace"]
+log = structlog.getLogger("chebi_namespace")
 
-# FTP options
-server = "ftp.ebi.ac.uk"
-source_data_fp = "/pub/databases/chebi/ontology/chebi.obo.gz"
+# Globals
 
-# Local data filepath setup
-basename = os.path.basename(source_data_fp)
+namespace = "CHEBI"
+namespace_lc = namespace.lower()
+namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_lc]
 
-if not re.search(
-    ".gz$", basename
-):  # we basically gzip everything retrieved that isn't already gzipped
-    basename = f"{basename}.gz"
-
-local_data_fp = f"{settings.DOWNLOAD_DIR}/{basename}"
-
-
-def get_metadata():
-    # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yml file
-    dt = datetime.datetime.now().replace(microsecond=0).isoformat()
-    metadata = {
-        "name": namespace_def["namespace"],
-        "type": "namespace",
-        "namespace": namespace_def["namespace"],
-        "description": namespace_def["description"],
-        "version": dt,
-        "src_url": namespace_def["src_url"],
-        "url_template": namespace_def["template_url"],
-    }
-
-    return metadata
+download_url = "ftp://ftp.ebi.ac.uk/pub/databases/chebi/ontology/chebi.obo.gz"
+download_fn = f"{settings.DOWNLOAD_DIR}/chebi.obo.gz"
+resource_fn = f"{settings.DATA_DIR}/namespaces/{namespace_lc}.jsonl.gz"
 
 
-def update_data_files() -> bool:
-    """ Download data files if needed
+def build_json():
 
-    Args:
-        None
-    Returns:
-        bool: files updated = True, False if not
-    """
-
-    # Get ftp file - but not if local downloaded file is newer
-    result = utils.get_ftp_file(
-        server, source_data_fp, local_data_fp, days_old=settings.UPDATE_CYCLE_DAYS
-    )
-    return result
-
-
-def process_obo(force: bool = False):
-
-    # Terminology JSONL output filename
-    data_fp = settings.DATA_DIR
-    terms_fp = f"{data_fp}/namespaces/{namespace_key}.jsonl.gz"
-
-    # Don't rebuild file if it's newer than downloaded source file
-    if not force:
-        if utils.file_newer(terms_fp, local_data_fp):
-            log.info("Will not rebuild data file as it is newer than downloaded source file")
-            return False
-
-    with gzip.open(local_data_fp, "rt") as fi, gzip.open(terms_fp, "wt") as fo:
+    with gzip.open(download_fn, "rt") as fi, gzip.open(resource_fn, "wt") as fo:
 
         # Header JSONL record for terminology
-        metadata = get_metadata()
+        metadata = get_metadata(namespace_def)
         fo.write("{}\n".format(json.dumps({"metadata": metadata})))
-
-        term = {}
 
         keyval_regex = re.compile("(\w[\-\w]+)\:\s(.*?)\s*$")
         term_regex = re.compile("\[Term\]")
         blankline_regex = re.compile("\s*$")
+
+        term = None
 
         unique_names = {}
 
@@ -110,87 +62,71 @@ def process_obo(force: bool = False):
             blank_match = blankline_regex.match(line)
             keyval_match = keyval_regex.match(line)
             if term_match:
-                term = {
-                    "namespace": ns_prefix,
-                    "namespace_value": "",
-                    "src_id": "",
-                    "id": "",
-                    "label": "",
-                    "name": "",
-                    "description": "",
-                    "synonyms": [],
-                    "entity_types": ["Abundance"],
-                    "equivalences": [],
-                    "alt_ids": [],
-                }
+                term = Term(namespace=namespace, entity_types=["Abundance"])
 
-            elif blank_match:
+            elif blank_match:  # On blank line save term record
                 # Add term to JSONL
-                if term.get("id", None):
-                    fo.write("{}\n".format(json.dumps({"term": term})))
-                term = {}
+                if term and term.id:
+                    fo.write("{}\n".format(json.dumps({"term": term.dict()})))
+
+                term = None
 
             elif term and keyval_match:
                 key = keyval_match.group(1)
                 val = keyval_match.group(2)
 
                 if key == "id":
-                    term["src_id"] = val
+                    term.id = val.replace("CHEBI:", "")
+                    term.key = val
 
                 elif key == "name":
-                    if val == "albiglutide":
-                        pass  # Duplicate is an obsolete record
-                    elif val not in unique_names:
-                        unique_names[val] = 1
-                    else:
-                        log.error(f"Duplicate name in CHEBI: {val}")
-
-                    name_id = utils.get_prefixed_id(ns_prefix, val)
-                    term["label"] = val
-                    term["name"] = val
-                    if len(name_id) > 80:
-                        term["id"] = term["src_id"]
-                        term["alt_ids"].append(name_id)
-                        term["namespace_value"] = term["src_id"].replace("CHEBI:", "")
-                    else:
-                        term["id"] = name_id
-                        term["alt_ids"].append(term["src_id"])
-                        term["namespace_value"] = val
+                    term.name = val
+                    term.label = val
+                    term.alt_keys.append(f"CHEBI:{quote_id(val)}")
 
                 elif key == "subset":
                     if val not in ["2_STAR", "3_STAR"]:
-                        term = {}
+                        term = None
                         continue
 
                 elif key == "def":
-                    term["description"] = val
+                    val = val.replace("[]", "")
+                    term.description = strip_quotes(val)
 
                 elif key == "synonym":
                     matches = re.search('"(.*?)"', val)
                     if matches:
                         syn = matches.group(1)
-                        term["synonyms"].append(syn)
+                        term.synonyms.append(syn)
                     else:
                         log.warning(f"Unmatched synonym: {val}")
 
                 elif key == "alt_id":
-                    term["alt_ids"].append(val.strip())
+                    term.alt_keys.append(val.strip())
 
                 elif key == "property_value":
                     matches = re.search('inchikey\s"(.*?)"', val)
                     if matches:
                         inchikey = matches.group(1)
-                        term["equivalences"].append(f"INCHIKEY:{inchikey}")
+                        term.equivalence_keys.append(f"INCHIKEY:{inchikey}")
 
                 elif key == "is_obsolete":
-                    term = {}
+                    term = None
 
 
-def main():
+def main(
+    overwrite: bool = Option(False, help="Force overwrite of output resource data file"),
+    force_download: bool = Option(False, help="Force re-downloading of source data file"),
+):
 
-    update_data_files()
-    process_obo()
+    (changed, msg) = get_ftp_file(download_url, download_fn, force_download=force_download)
+
+    if msg:
+        log.info("Collect download file", result=msg, changed=changed)
+
+    if changed or overwrite:
+        build_json()
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

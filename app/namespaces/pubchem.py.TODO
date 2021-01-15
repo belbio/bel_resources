@@ -1,0 +1,236 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+"""
+Usage:  pubchem.py
+
+## Data files
+
+* ftp://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/
+
+"""
+
+import copy
+import datetime
+import gzip
+import json
+import os
+import re
+import subprocess
+import sys
+
+import structlog
+import yaml
+
+import app.settings as settings
+import app.utils as utils
+
+# TODO - this results in a 10Gb file of chemical entities - which is way too large to handle right now
+#      - also - we should create a namespace for INCHIKEY:xxxx 
+
+log = structlog.getLogger(__name__)
+
+# Globals
+namespace_key = "pubchem"
+namespace = settings.NAMESPACE_DEFINITIONS[namespace_key]
+
+source_ftp_url = "ftp://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/"
+download_dir = f"{settings.DOWNLOAD_DIR}/{namespace_key}"
+
+# Terminology JSONL output filename
+data_fp = settings.DATA_DIR
+terms_fp = f"{data_fp}/namespaces/{namespace_key}.jsonl.gz"
+
+
+def get_metadata():
+    # Setup metadata info - mostly captured from namespace definition file which
+    # can be overridden in belbio_conf.yml file
+    dt = datetime.datetime.now().replace(microsecond=0).isoformat()
+    metadata = {
+        "name": namespace["namespace"],
+        "type": "namespace",
+        "namespace": namespace["namespace"],
+        "description": namespace["description"],
+        "version": dt,
+        "src_url": namespace["src_url"],
+        "url_template": namespace["template_url"],
+    }
+
+    return metadata
+
+
+def update_data_files() -> bool:
+    """ Download source data files if needed
+
+    Args:
+        None
+    Returns:
+        bool: files updated = True, False if not
+    """
+
+    subprocess.run(["wget", "--no-host-directories", "--no-directories", "--recursive", "--timestamping", "--reject-regex", "Patent", "--directory-prefix",  download_dir, source_ftp_url])
+    # wget --no-host-directories --no-directories --recursive --timestamping --reject-regex Patent --directory-prefix /data/bel_resources/downloads/pubchem ftp://ftp.ncbi.nlm.nih.gov/pubchem/Compound/Extras/
+
+
+def get_labels():
+
+    # Collect term labels (titles)
+    with gzip.open(f"{download_dir}/CID-Title.gz", 'rb') as f:
+        for line in f:
+            try:
+                (id_, label) = line.decode('latin-1').rstrip().split('\t')
+                yield int(id_), label
+
+            except UnicodeDecodeError as e:
+                log.error(f"Error getting label line: {line}  error: {str(e)}")
+   
+
+def get_inchi():
+    
+    # Collect inchi
+    with gzip.open(f"{download_dir}/CID-InChI-Key.gz", 'rb') as f:
+        for line in f:
+            try:
+                (id_, inchi, inchikey) = line.decode('latin-1').rstrip().split('\t')
+                inchi = inchi.replace("InChI=", "")
+                yield int(id_), inchi, inchikey
+
+            except UnicodeDecodeError as e:
+                log.error(f"Error getting inchikey line: {line}  error: {str(e)}")
+
+
+def get_iupac():
+    """Get IUPAC compound names"""
+
+    with gzip.open(f"{download_dir}/CID-IUPAC.gz", 'rb') as f:
+        for line in f:
+            try:
+                (id_, iupac) = line.decode('latin-1').rstrip().split('\t')
+                yield int(id_), iupac
+
+            except UnicodeDecodeError as e:
+                log.error(f"Error getting iupac line: {line}  error: {str(e)}")
+
+
+def get_synonyms():
+    """Get compound synonyms"""
+
+    with gzip.open(f"{download_dir}/CID-Synonym-filtered.gz", 'rb') as f:
+        last_id = -1
+        syns = []
+        for line in f:
+            try:
+                (id_, syn) = line.decode('latin-1').rstrip().split('\t')
+                if last_id != id_:
+                    yield int(last_id), syns
+                    last_id = id_
+                    syns = []
+
+                syns.append(syn)
+
+            except UnicodeDecodeError as e:
+                log.error(f"Error getting iupac line: {line}  error: {str(e)}")
+
+        yield int(id_), syns
+
+
+def collect_terms():
+    """Collect term info across multiple files"""
+
+    next_id = 1
+    label = (0,)  # (id, label)
+    inchi = (0,)  # (id, inchi, inchikey)
+    iupac = (0,)  # (id, iupac)
+    syns = (0,)  # (id, syns)
+
+    next_label = get_labels()
+    next_inchi = get_inchi()
+    next_iupac = get_iupac()
+    next_syns = get_synonyms()
+
+    while 1:
+        
+        # print("next id", next_id)
+
+        term = {
+            "namespace": "PUBCHEM",
+            "description": "",
+            "synonyms": [],
+            "entity_types": ["Abundance"],
+            "equivalences": [],
+        }
+
+        while label[0] < next_id:
+            label = next(next_label)
+            # print("Label", label, "next id", next_id)
+
+        while inchi[0] < next_id:
+            inchi = next(next_inchi)
+            # print("Inchi", inchi, "next id", next_id)
+        
+        while iupac[0] < next_id:
+            iupac = next(next_iupac)
+        
+        while syns[0] < next_id:
+            syns = next(next_syns)
+            # print("Syns", syns)
+        
+        current_id = sorted([label[0], inchi[0], iupac[0], syns[0]])[0]
+
+        term["namespace_value"] = str(current_id)
+        term["src_id"] = current_id
+        term["id"] = f"PUBCHEM:{current_id}"
+
+        if label[0] == current_id:
+            term["label"] = label[1]
+            term["name"] = label[1]
+        
+        if inchi[0] == current_id:
+            # print("Inchi", inchi)
+            term["synonyms"].append(inchi[1])
+            term["equivalences"].append(f"INCHIKEY:{inchi[2]}")
+
+        if iupac[0] == current_id:
+            term["synonyms"].append(iupac[1])
+        
+        if syns[0] == current_id:
+            term["synonyms"].extend(syns[1])
+        
+        yield term
+
+        next_id = current_id + 1
+
+
+def write_terms():
+    """Collect data for pubchem terms"""
+
+    metadata = get_metadata()
+
+    # Write out namespace
+    with gzip.open(terms_fp, "wt") as fo:
+        fo.write("{}\n".format(json.dumps(metadata)))
+        try:
+            cnt = 0
+            for term in collect_terms():
+                
+                # print('DumpVar:\n', json.dumps(term, indent=4))
+                fo.write("{}\n".format(json.dumps(term)))
+
+                cnt += 1
+                if cnt % 1000000 == 0:
+                    print(f"Num of compounds {cnt}", flush=True)
+
+        except StopIteration as e:
+            sys.exit()
+
+def main():
+
+    # for label in get_labels():
+    #     print("Label", label)
+    # quit()
+
+    write_terms()
+
+
+if __name__ == "__main__":
+    main()

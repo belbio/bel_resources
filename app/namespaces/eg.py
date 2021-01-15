@@ -13,90 +13,33 @@ import json
 import os
 import re
 
+import structlog
 import yaml
 
 import app.settings as settings
-import app.utils as utils
-import structlog
+import app.setup_logging
+import typer
+from app.common.collect_sources import get_ftp_file
+from app.common.resources import get_metadata, get_species_labels
+from app.common.text import quote_id
+from app.schemas.main import Term
+from typer import Option
 
-log = structlog.getLogger(__name__)
+log = structlog.getLogger("eg_namespace")
 
 # Globals
-namespace_key = "eg"
-namespace = settings.NAMESPACE_DEFINITIONS[namespace_key]
 
-# ftp://ftp.ncbi.nih.gov/gene/DATA/gene_history.gz
-# ftp://ftp.ncbi.nih.gov/gene/DATA/GENE_INFO/Mammalia/
-# ftp://ftp.ncbi.nih.gov/gene/DATA/GENE_INFO/All_Data.gene_info.gz
+namespace = "EG"
+namespace_lc = namespace.lower()
+namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_lc]
 
-server = "ftp.ncbi.nlm.nih.gov"
-source_data_fp = "/gene/DATA/GENE_INFO/All_Data.gene_info.gz"
-source_data_history_fp = "/gene/DATA/gene_history.gz"
-
-# Local data filepath setup
-basename = os.path.basename(source_data_fp)
-
-if not re.search(
-    ".gz$", basename
-):  # we basically gzip everything retrieved that isn't already gzipped
-    basename = f"{basename}.gz"
-
-local_data_fp = f"{settings.DOWNLOAD_DIR}/{namespace_key}_{basename}"
-
-basename = os.path.basename(source_data_history_fp)
-
-if not re.search(
-    ".gz$", basename
-):  # we basically gzip everything retrieved that isn't already gzipped
-
-    basename = f"{basename}.gz"
-local_data_history_fp = f"{settings.DOWNLOAD_DIR}/{namespace_key}_{basename}"
-
-# Terminology JSONL output filename
-data_fp = settings.DATA_DIR
-terms_fp = f"{data_fp}/namespaces/{namespace_key}.jsonl.gz"
-terms_hmrz_fp = f"{data_fp}/namespaces/{namespace_key}_hmrz.jsonl.gz"  # Human, mouse, rat and zebrafish EG dataset
+download_url = "ftp://ftp.ncbi.nlm.nih.gov/gene/DATA/GENE_INFO/All_Data.gene_info.gz"
+download_history_url = "ftp://ftp.ncbi.nlm.nih.gov/gene/DATA/gene_history.gz"
+download_fn = f"{settings.DOWNLOAD_DIR}/eg.csv.gz"
+download_history_fn = f"{settings.DOWNLOAD_DIR}/eg_gene_history.json.gz"
+resource_fn = f"{settings.DATA_DIR}/namespaces/{namespace_lc}.jsonl.gz"
+resource_fn_hmrz = f"{settings.DATA_DIR}/namespaces/{namespace_lc}_hmrz.jsonl.gz"
 hmrz_species = ["TAX:9606", "TAX:10090", "TAX:10116", "TAX:7955"]
-
-
-def get_metadata():
-    # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yml file
-    dt = datetime.datetime.now().replace(microsecond=0).isoformat()
-    metadata = {
-        "name": namespace["namespace"],
-        "type": "namespace",
-        "namespace": namespace["namespace"],
-        "description": namespace["description"],
-        "version": dt,
-        "src_url": namespace["src_url"],
-        "url_template": namespace["template_url"],
-    }
-
-    return metadata
-
-
-def update_data_files() -> bool:
-    """ Download data files if needed
-
-    Args:
-        None
-    Returns:
-        bool: files updated = True, False if not
-    """
-
-    result = utils.get_ftp_file(
-        server, source_data_history_fp, local_data_history_fp, days_old=settings.UPDATE_CYCLE_DAYS
-    )
-    result = utils.get_ftp_file(
-        server, source_data_fp, local_data_fp, days_old=settings.UPDATE_CYCLE_DAYS
-    )
-
-    changed = False
-    if "Downloaded" in result[1]:
-        changed = True
-
-    return changed
 
 
 def get_history():
@@ -107,7 +50,7 @@ def get_history():
     """
 
     history = {}
-    with gzip.open(local_data_history_fp, "rt") as fi:
+    with gzip.open(download_history_fn, "rt") as fi:
 
         fi.__next__()  # skip header line
 
@@ -125,7 +68,7 @@ def get_history():
     return history
 
 
-def build_json(force: bool = False):
+def build_json():
     """Build EG namespace json load file
 
     Args:
@@ -135,15 +78,12 @@ def build_json(force: bool = False):
         None
     """
 
-    # Don't rebuild file if it's newer than downloaded source file
-    if not force:
-        if utils.file_newer(terms_fp, local_data_fp):
-            log.info("Will not rebuild data file as it is newer than downloaded source file")
-            return False
+    metadata = get_metadata(namespace_def)
+    history = get_history()
 
-    species_labels_fn = f"{data_fp}/namespaces/tax_labels.json.gz"
-    with gzip.open(species_labels_fn, "r") as fi:
-        species_label = json.load(fi)
+    collect_prefixes = {}
+
+    species_labels = get_species_labels()
 
     missing_entity_types = {}
     bel_entity_type_map = {
@@ -159,35 +99,60 @@ def build_json(force: bool = False):
         "rRNA": ["Gene", "RNA"],
     }
 
-    history = get_history()
-
-    with gzip.open(local_data_fp, "rt") as fi, gzip.open(terms_fp, "wt") as fo:
+    with gzip.open(download_fn, "rt") as fi, gzip.open(
+        resource_fn, "wt"
+    ) as fo, gzip.open(resource_fn_hmrz, "wt") as fz:
 
         # Header JSONL record for terminology
-        metadata = get_metadata()
+        metadata = get_metadata(namespace_def)
         fo.write("{}\n".format(json.dumps({"metadata": metadata})))
+        fz.write("{}\n".format(json.dumps({"metadata": metadata})))
 
         fi.__next__()  # skip header line
 
         for line in fi:
 
             cols = line.split("\t")
-            (tax_src_id, gene_id, symbol, synonyms, desc, gene_type, name) = (
+            (tax_src_id, gene_id, symbol, syns, dbxrefs, desc, gene_type, name) = (
                 cols[0],
                 cols[1],
                 cols[2],
                 cols[4],
+                cols[5],
                 cols[8],
                 cols[9],
                 cols[11],
             )
-            tax_id = f"TAX:{tax_src_id}"
+            species_key = f"TAX:{tax_src_id}"
 
-            synonyms = synonyms.rstrip()
-            if synonyms == "-":
-                synonyms = None
+            # Process synonyms
+            syns = syns.rstrip()
+            if syns:
+                synonyms = syns.split("|")
+
+            # Process equivalences
+            equivalence_keys = []
+            dbxrefs = dbxrefs.rstrip()
+            if dbxrefs == "-":
+                dbxrefs = None
             else:
-                synonyms = synonyms.split("|")
+                dbxrefs = dbxrefs.split("|")
+            if dbxrefs is not None:
+                for dbxref in dbxrefs:
+                    if "Ensembl:" in dbxref:
+                        equivalence_keys.append(dbxref)
+                    elif "MGI:MGI" in dbxref:
+                        dbxref.replace("MGI:MGI:", "MGI:")
+                        equivalence_keys.append(dbxref)
+                    elif "VGNC:VGNC:" in dbxref:
+                        dbxref.replace("VGNC:VGNC:", "VGNC:")
+                        equivalence_keys.append(dbxref)
+                    elif "HGNC:HGNC:" in dbxref:
+                        dbxref.replace("HGNC:HGNC:", "HGNC:")
+                        equivalence_keys.append(dbxref)
+                    else:
+                        (prefix, rest) = dbxref.split(":")
+                        collect_prefixes[prefix] = 1
 
             if gene_type in ["miscRNA", "biological-region"]:  # Skip gene types
                 continue
@@ -201,55 +166,62 @@ def build_json(force: bool = False):
             if name == "-":
                 name = symbol
 
-            term = {
-                "namespace": namespace["namespace"],
-                "namespace_value": gene_id,
-                "src_id": gene_id,
-                "id": utils.get_prefixed_id(namespace["namespace"], gene_id),
-                "label": symbol,
-                "name": name,
-                "description": desc,
-                "species_id": tax_id,
-                "species_label": species_label.get(tax_id, None),
-            }
-            if name != "-":
-                term["name"] = name
-
-            if synonyms:
-                term["synonyms"] = copy.copy(synonyms)
+            term = Term(
+                key=f"{namespace}:{gene_id}",
+                namespace=namespace,
+                id=gene_id,
+                label=symbol,
+                name=name,
+                description=desc,
+                species_key=species_key,
+                species_label=species_labels.get(species_key, ""),
+                equivalence_keys=copy.copy(equivalence_keys),
+                synonyms=copy.copy(synonyms),
+            )
 
             if entity_types:
-                term["entity_types"] = copy.copy(entity_types)
+                term.entity_types = copy.copy(entity_types)
 
             # TODO - check that this is working correctly
             if gene_id in history:
-                term["obsolete_ids"] = [f"EG:{obs_id}" for obs_id in history[gene_id].keys()]
+                term.obsolete_keys = [
+                    f"{namespace}:{obs_id}" for obs_id in history[gene_id].keys()
+                ]
 
             # Add term to JSONL
-            fo.write("{}\n".format(json.dumps({"term": term})))
+            fo.write("{}\n".format(json.dumps({"term": term.dict()})))
+
+            if species_key in hmrz_species:
+                fz.write("{}\n".format(json.dumps({"term": term.dict()})))
+
+    log.info(f"Equivalence Prefixes {json.dumps(collect_prefixes, indent=4)}")
 
     if missing_entity_types:
         log.error("Missing Entity Types:\n", json.dumps(missing_entity_types))
 
 
-def build_hmrz_json():
-    """Extract Human, Mouse and Rat from EG into a new file """
+def main(
+    overwrite: bool = Option(
+        False, help="Force overwrite of output resource data file"
+    ),
+    force_download: bool = Option(
+        False, help="Force re-downloading of source data file"
+    ),
+):
 
-    with gzip.open(terms_fp, "rt") as fi, gzip.open(terms_hmrz_fp, "wt") as fo:
-        for line in fi:
-            doc = json.loads(line)
-            if "term" in doc and doc["term"]["species_id"] in hmrz_species:
-                fo.write("{}\n".format(json.dumps(doc)))
-            elif "metadata" in doc:
-                fo.write("{}\n".format(json.dumps(doc)))
+    (changed, msg) = get_ftp_file(
+        download_url, download_fn, force_download=force_download
+    )
+    (changed_history, msg_history) = get_ftp_file(
+        download_history_url, download_history_fn, force_download=force_download
+    )
 
+    if msg:
+        log.info("Collect download file", result=msg, changed=changed)
 
-def main():
-
-    update_data_files()
-    build_json()
-    build_hmrz_json()  # human, mouse, rat, zebrafish filtered EG namespace
+    if changed or overwrite:
+        build_json()
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)
