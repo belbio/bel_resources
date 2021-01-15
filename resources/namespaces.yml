@@ -164,6 +164,44 @@ zfin:
 ## Virtual namespaces #################################################################################
 #######################################################################################################
 
+ensembl:
+  name: Ensembl
+  namespace: ensembl
+  description: Ensembl is a joint project between EMBL - EBI and the Sanger Institute to develop a software system which produces and maintains automatic annotation on selected eukaryotic genomes. This collections also references outgroup organisms.
+  source_name: Ensembl
+  source_url: https://www.ensembl.org/
+
+  namespace_type: virtual
+
+  entity_types: ["Gene", "RNA", "Micro_RNA", "Protein"]
+
+  id_regex: ^((ENS[FPTG]\\d{11}(\\.\\d+)?)|(FB\\w{2}\\d{7})|(Y[A-Z]{2}\\d{3}[a-zA-Z](\\-[A-Z])?)|([A-Z_a-z0-9]+(\\.)?(t)?(\\d+)?([a-z])?))$
+
+  example_url: https://identifiers.org/ensembl:ENSG00000139618
+  template_url: https://identifiers.org/ensembl:{$id}
+
+  identifiers_org: True
+  identifiers_org_namespace: ensembl
+
+ena:
+  name: ENA EMBL
+  namespace: ena.embl
+  description: The European Nucleotide Archive (ENA) captures and presents information relating to experimental workflows that are based around nucleotide sequencing. ENA is made up of a number of distinct databases that includes EMBL-Bank, the Sequence Read Archive (SRA) and the Trace Archive each with their own data formats and standards. This collection references Embl-Bank identifiers.
+  source_name: ENA
+  source_url: https://www.ebi.ac.uk/ena/
+
+  namespace_type: virtual
+
+  entity_types: ["Gene", "RNA", "Micro_RNA", "Protein"]
+
+  id_regex: ^[A-Z]+[0-9]+(\.\d+)?$
+
+  example_url: https://identifiers.org/ena.embl:BN000065
+  template_url: https://identifiers.org/ena.embl:{$id}
+
+  identifiers_org: True
+  identifiers_org_namespace: ena.embl
+
 up:
   name: Uniprot
   namespace: UP
@@ -173,7 +211,7 @@ up:
 
   namespace_type: virtual
 
-  entity_types: ["Abundance"]
+  entity_types: ["Protein"]
 
   id_regex: ^([A-N,R-Z][0-9]([A-Z][A-Z, 0-9][A-Z, 0-9][0-9]){1,2})|([O,P,Q][0-9][A-Z, 0-9][A-Z, 0-9][A-Z, 0-9][0-9])(\.\d+)?$
 
