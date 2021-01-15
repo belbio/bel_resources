@@ -5,135 +5,59 @@
 Usage:  mgi.py
 
 """
-
-import os
-import tempfile
-import json
-import re
-import datetime
 import copy
+import datetime
 import gzip
-
-import app.utils as utils
-import app.settings as settings
+import json
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+from typing import TextIO
 
 import structlog
+import yaml
 
-log = structlog.getLogger(__name__)
+import app.settings as settings
+import app.setup_logging
+import typer
+from app.common.collect_sources import get_web_file
+from app.common.resources import get_metadata, get_species_labels
+from app.common.text import quote_id
+from app.schemas.main import Term
+from typer import Option
+
+log = structlog.getLogger("mgi_namespace")
 
 # Globals
-namespace_key = "mgi"
-namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_key]
-ns_prefix = namespace_def["namespace"]
 
-tax_id = "TAX:10090"
+namespace = "MGI"
+namespace_lc = namespace.lower()
+namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_lc]
 
-terms_fp = f"../data/terms/{namespace_key}.jsonl.gz"
-tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
-dt = datetime.datetime.now().replace(microsecond=0).isoformat()
+species_key = "TAX:10090"
 
-# File description: http://www.informatics.jax.org/downloads/reports/index.html
+# File descriptions: http://www.informatics.jax.org/downloads/reports/index.html
 # http://www.informatics.jax.org/downloads/reports/MRK_List1.rpt (including withdrawn marker symbols)
 # http://www.informatics.jax.org/downloads/reports/MRK_List2.rpt (excluding withdrawn marker symbols)
+download_url = "http://www.informatics.jax.org/downloads/reports/MRK_List2.rpt"
+download_url2 = (
+    "http://www.informatics.jax.org/downloads/reports/MRK_SwissProt.rpt"  # Equivalences
+)
+download_url3 = "http://www.informatics.jax.org/downloads/reports/MGI_EntrezGene.rpt"  # Equivalences
+
+download_fn = f"{settings.DOWNLOAD_DIR}/mgi_MRK_List2.rpt.gz"
+download_fn2 = f"{settings.DOWNLOAD_DIR}/mgi_MRK_SwissProt.rpt.gz"
+download_fn3 = f"{settings.DOWNLOAD_DIR}/mgi_MGI_EntrezGene.rpt.gz"
+
+resource_fn = f"{settings.DATA_DIR}/namespaces/{namespace_lc}.jsonl.gz"
 
 
-url_main = "http://www.informatics.jax.org/downloads/reports/MRK_List2.rpt"
-url2 = "http://www.informatics.jax.org/downloads/reports/MRK_SwissProt.rpt"  # Equivalences
-url3 = "http://www.informatics.jax.org/downloads/reports/MGI_EntrezGene.rpt"  # Equivalences
+def build_json():
+    """Build RGD namespace json load file"""
 
-# Local data filepath setup
-basename = os.path.basename(url_main)
-
-if not re.search(
-    ".gz$", basename
-):  # we basically gzip everything retrieved that isn't already gzipped
-    basename = f"{basename}.gz"
-
-local_data_main_fp = f"{settings.DOWNLOAD_DIR}/{namespace_key}_{basename}"
-
-basename = os.path.basename(url2)
-
-if not re.search(
-    ".gz$", basename
-):  # we basically gzip everything retrieved that isn't already gzipped
-
-    basename = f"{basename}.gz"
-local_data_2_fp = f"{settings.DOWNLOAD_DIR}/{namespace_key}_{basename}"
-
-basename = os.path.basename(url3)
-
-if not re.search(
-    ".gz$", basename
-):  # we basically gzip everything retrieved that isn't already gzipped
-
-    basename = f"{basename}.gz"
-local_data_3_fp = f"{settings.DOWNLOAD_DIR}/{namespace_key}_{basename}"
-
-
-def get_metadata():
-    # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yml file
-    dt = datetime.datetime.now().replace(microsecond=0).isoformat()
-    metadata = {
-        "name": namespace_def["namespace"],
-        "type": "namespace",
-        "namespace": namespace_def["namespace"],
-        "description": namespace_def["description"],
-        "version": dt,
-        "src_url": namespace_def["src_url"],
-        "url_template": namespace_def["template_url"],
-    }
-
-    return metadata
-
-
-def update_data_files() -> bool:
-    """ Download data files if needed
-
-    Args:
-        None
-    Returns:
-        bool: files updated = True, False if not
-    """
-
-    (changed_main, response_main) = utils.get_web_file(
-        url_main, local_data_main_fp, days_old=settings.UPDATE_CYCLE_DAYS
-    )
-    (changed2, response2) = utils.get_web_file(
-        url2, local_data_2_fp, days_old=settings.UPDATE_CYCLE_DAYS
-    )
-    (changed3, response3) = utils.get_web_file(
-        url3, local_data_3_fp, days_old=settings.UPDATE_CYCLE_DAYS
-    )
-
-    log.info(response_main)
-
-    return changed_main
-
-
-def build_json(force: bool = False):
-    """Build RGD namespace json load file
-
-    Args:
-        force (bool): build json result regardless of file mod dates
-
-    Returns:
-        None
-    """
-
-    # Terminology JSONL output filename
-    data_fp = settings.DATA_DIR
-    terms_fp = f"{data_fp}/namespaces/{namespace_key}.jsonl.gz"
-
-    # Don't rebuild file if it's newer than downloaded source file
-    if not force:
-        if utils.file_newer(terms_fp, local_data_main_fp):
-            log.info("Will not rebuild data file as it is newer than downloaded source file")
-            return False
-
-    species_labels_fn = f"{data_fp}/namespaces/tax_labels.json.gz"
-    with gzip.open(species_labels_fn, "r") as fi:
-        species_label = json.load(fi)
+    species_labels = get_species_labels()
 
     # Map gene_types to BEL entity types
     bel_entity_type_map = {
@@ -171,8 +95,9 @@ def build_json(force: bool = False):
         "SRP RNA gene": ["Gene", "RNA"],
     }
 
+    # Swissprot equivalents
     sp_eqv = {}
-    with gzip.open(local_data_2_fp, "rt") as fi:
+    with gzip.open(download_fn2, "rt") as fi:
 
         for line in fi:
             cols = line.rstrip().split("\t")
@@ -182,8 +107,9 @@ def build_json(force: bool = False):
             mgi_id = mgi_id.replace("MGI:", "")
             sp_eqv[mgi_id] = sp_accession.split(" ")
 
+    # EntrezGene equivalents
     eg_eqv = {}
-    with gzip.open(local_data_3_fp, "rt") as fi:
+    with gzip.open(download_fn3, "rt") as fi:
 
         for line in fi:
             cols = line.split("\t")
@@ -193,13 +119,10 @@ def build_json(force: bool = False):
             mgi_id = mgi_id.replace("MGI:", "")
             eg_eqv[mgi_id] = [eg_id]
 
-            if mgi_id == 2139422 or mgi_id == "2139422":
-                print("Duox1 equivalents 1", eg_eqv[mgi_id], type(mgi_id), eg_id)
-
-    with gzip.open(local_data_main_fp, "rt") as fi, gzip.open(terms_fp, "wt") as fo:
+    with gzip.open(download_fn, "rt") as fi, gzip.open(resource_fn, "wt") as fo:
 
         # Header JSONL record for terminology
-        metadata = get_metadata()
+        metadata = get_metadata(namespace_def)
         fo.write("{}\n".format(json.dumps({"metadata": metadata})))
 
         firstline = fi.readline()
@@ -238,40 +161,58 @@ def build_json(force: bool = False):
                     if not sp_accession:
                         continue
                     equivalences.append(f"SP:{sp_accession}")
-            if mgi_id in eg_eqv:
-                if mgi_id == 2139422 or mgi_id == "2139422":
-                    print("Duox1 equivalents", eg_eqv[mgi_id], type(mgi_id))
 
+            if mgi_id in eg_eqv:
                 for eg_id in eg_eqv[mgi_id]:
                     if not eg_id:
                         continue
                     equivalences.append(f"EG:{eg_id}")
 
-            term = {
-                "namespace": ns_prefix,
-                "namespace_value": symbol,
-                "src_id": mgi_id,
-                "id": utils.get_prefixed_id(ns_prefix, symbol),
-                "alt_ids": [utils.get_prefixed_id(ns_prefix, mgi_id)],
-                "label": symbol,
-                "name": name,
-                "species_id": tax_id,
-                "species_label": species_label[tax_id],
-                "entity_types": copy.copy(entity_types),
-                "equivalences": copy.copy(equivalences),
-            }
+            term = Term(
+                key=f"{namespace}:{mgi_id}",
+                namespace=namespace,
+                id=mgi_id,
+                label=symbol,
+                name=name,
+                alt_keys=[f"{namespace}:{symbol}"],
+                species_key=species_key,
+                species_label=species_labels.get(species_key, ""),
+                entity_types=copy.copy(entity_types),
+                equivalence_keys=copy.copy(equivalences),
+            )
+
             if len(synonyms):
-                term["synonyms"] = copy.copy(synonyms)
+                term.synonyms = copy.copy(synonyms)
 
             # Add term to JSONL
-            fo.write("{}\n".format(json.dumps({"term": term})))
+            fo.write("{}\n".format(json.dumps({"term": term.dict()})))
 
 
-def main():
+def main(
+    overwrite: bool = Option(
+        False, help="Force overwrite of output resource data file"
+    ),
+    force_download: bool = Option(
+        False, help="Force re-downloading of source data file"
+    ),
+):
 
-    update_data_files()
-    build_json()
+    (changed, msg) = get_web_file(
+        download_url, download_fn, force_download=force_download
+    )
+    (changed2, msg2) = get_web_file(
+        download_url2, download_fn2, force_download=force_download
+    )
+    (changed3, msg3) = get_web_file(
+        download_url3, download_fn3, force_download=force_download
+    )
+
+    if msg:
+        log.info("Collect download file", result=msg, changed=changed)
+
+    if changed or overwrite:
+        build_json()
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

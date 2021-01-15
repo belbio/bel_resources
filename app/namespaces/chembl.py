@@ -18,102 +18,41 @@ import tarfile
 import tempfile
 from typing import Any, Iterable, List, Mapping
 
+import structlog
 import yaml
 
 import app.settings as settings
 import app.setup_logging
-import app.utils as utils
-import structlog
+import typer
+from app.common.collect_sources import get_chembl_version, get_ftp_file
+from app.common.resources import get_metadata
+from app.common.text import quote_id, strip_quotes
+from app.schemas.main import Term
+from typer import Option
 
-log = structlog.getLogger(__name__)
+log = structlog.getLogger("chembl_namespace")
 
 # Globals
-namespace_key = "chembl"
-namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_key]
-ns_prefix = namespace_def["namespace"]
 
-server = "ftp.ebi.ac.uk"
-filename_regex = r"chembl_(.*?)_sqlite\.tar\.gz"
-server_directory = "/pub/databases/chembl/ChEMBLdb/latest/"
+namespace = "CHEMBL"
+namespace_lc = namespace.lower()
+namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_lc]
 
-# chembl_version = utils.get_chembl_version(filename_regex, server, server_directory, 1)
-chembl_version = "27"
-
-source_data_fp = f"/pub/databases/chembl/ChEMBLdb/latest/chembl_{chembl_version}_sqlite.tar.gz"
-
-# Local data filepath setup
-basename = os.path.basename(source_data_fp)
-
-if not re.search(
-    ".gz$", basename
-):  # we basically gzip everything retrieved that isn't already gzipped
-    basename = f"{basename}.gz"
-
-local_data_fp = f"{settings.DOWNLOAD_DIR}/{basename}"
-
-print(
-    """
-      This script requires MANUAL interaction to get latest chembl and untar it.
-      """
+chembl_version = get_chembl_version(
+    "ftp://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest"
 )
 
-
-def get_metadata():
-    # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yml file
-    dt = datetime.datetime.now().replace(microsecond=0).isoformat()
-    metadata = {
-        "name": namespace_def["namespace"],
-        "type": "namespace",
-        "namespace": namespace_def["namespace"],
-        "description": namespace_def["description"],
-        "version": dt,
-        "src_url": namespace_def["src_url"],
-        "url_template": namespace_def["template_url"],
-    }
-
-    return metadata
-
-
-
-def pref_name_dupes():
-    """Check that pref_name in chembl is uniq"""
-
-    check_pref_term_sql = """
-        select
-            chembl_id, pref_name
-        from
-            molecule_dictionary
-    """
-
-    db_filename = (
-        f"{settings.DOWNLOAD_DIR}/"
-        f"chembl_{chembl_version}/chembl_{chembl_version}_sqlite/chembl_{chembl_version}.db"
-    )
-
-    conn = sqlite3.connect(db_filename)
-    conn.row_factory = sqlite3.Row
-
-    dupes_flag = False  # set to false if any duplicates exist
-    with conn:
-        check_pref_term_uniqueness = {}
-        for row in conn.execute(check_pref_term_sql):
-            pref_name = row["pref_name"]
-            if pref_name:
-                pref_name = pref_name.lower()
-            chembl_id = row["chembl_id"]
-            if check_pref_term_uniqueness.get(pref_name, None):
-                log.error(
-                    f'CHEMBL pref_name used for multiple chembl_ids {chembl_id}, {check_pref_term_uniqueness["pref_name"]}'
-                )
-                dupes_flag = True
-
-    return dupes_flag
+download_url = f"ftp://ftp.ebi.ac.uk/pub/databases/chembl/ChEMBLdb/latest/chembl_{chembl_version}_sqlite.tar.gz"
+download_fn = f"{settings.DOWNLOAD_DIR}/chembl_{chembl_version}_sqlite.tar.gz"
+resource_fn = f"{settings.DATA_DIR}/namespaces/{namespace_lc}.jsonl.gz"
+download_db_fn = f"{settings.DOWNLOAD_DIR}/chembl_{chembl_version}/chembl_{chembl_version}_sqlite/chembl_{chembl_version}.db"
 
 
 def query_db() -> Iterable[Mapping[str, Any]]:
     """Generator to run chembl term queries using sqlite chembl db"""
-    log.error("This script requires MANUAL interaction to get latest chembl and untar it.")
+    log.error(
+        "This script requires MANUAL interaction to get latest chembl and untar it."
+    )
 
     db_filename = (
         f"{settings.DOWNLOAD_DIR}/"
@@ -141,102 +80,101 @@ def query_db() -> Iterable[Mapping[str, Any]]:
             chembl_id = row["chembl_id"].replace("CHEMBL", "CHEMBL:")
             src_id = row["chembl_id"].replace("CHEMBL", "")
             syns = row["syns"]
+
             if syns:
                 syns = syns.lower().split("||")
             else:
                 syns = []
 
             pref_name = row["pref_name"]
-            alt_ids = []
+            alt_keys = []
             namespace_value = src_id
 
             if pref_name:
-                alt_ids.append(chembl_id)
                 pref_name = pref_name.lower()
+                alt_keys.append(f"CHEMBL:{quote_id(pref_name)}")
                 name = pref_name
-                chembl_id = utils.get_prefixed_id(ns_prefix, pref_name)
-                namespace_value = pref_name
             elif syns:
                 name = syns[0]
             else:
                 name = chembl_id
 
-            term = {
+            record = {
                 "name": name,
-                "namespace_value": namespace_value,
                 "pref_name": pref_name,
                 "chembl_id": chembl_id,
                 "src_id": src_id,
-                "alt_ids": alt_ids,
+                "alt_keys": alt_keys,
                 "syns": copy.copy(syns),
             }
             if row["standard_inchi_key"]:
-                term["inchi_key"] = f'INCHIKEY:{row["standard_inchi_key"]}'
+                record["inchi_key"] = f'INCHIKEY:{row["standard_inchi_key"]}'
             if row["chebi_par_id"]:
-                term["chebi_id"] = f"CHEBI:{row['chebi_par_id']}"
+                record["chebi_id"] = f"CHEBI:{row['chebi_par_id']}"
 
-            yield term
+            yield record
 
 
-def build_json(force: bool = False):
+def build_json():
     """Build CHEMBL namespace json load file
 
-    Have to build this as a JSON term file since there are multiple tables that
-    have to be joined and records collapsed to the Parent ID.
-
-    Args:
-        force (bool): build jsonl result regardless of file mod dates
-
-    Returns:
-        None
+    There are multiple tables that have to be joined and records collapsed to the Parent ID.
     """
 
-    # Terminology JSONL output filename
-    data_fp = settings.DATA_DIR
-    terms_fp = f"{data_fp}/namespaces/{namespace_key}.jsonl.gz"
-
-    # Don't rebuild file if it's newer than downloaded source file
-    if not force:
-        if utils.file_newer(terms_fp, local_data_fp):
-            log.warning("Will not rebuild data file as it is newer than downloaded source files")
-            return False
-
-    with gzip.open(terms_fp, mode="wt") as fo:
+    with gzip.open(resource_fn, mode="wt") as fo:
 
         # Header JSONL record for terminology
-        metadata = get_metadata()
+        metadata = get_metadata(namespace_def)
         fo.write("{}\n".format(json.dumps({"metadata": metadata})))
 
-        for row in query_db():
+        for record in query_db():
+            key = f"{namespace}:{record['src_id']}"
+            if not record["pref_name"]:
+                name = key
+                label = ""
+            else:
+                name = record["pref_name"]
+                label = name
 
-            term = {
-                "namespace": ns_prefix,
-                "namespace_value": row["namespace_value"],
-                "src_id": row["src_id"],
-                "id": row["chembl_id"],
-                "alt_ids": row["alt_ids"],
-                "label": row["name"],
-                "name": row["name"],
-                "synonyms": copy.copy(list(set(row["syns"]))),
-                "entity_types": ["Abundance"],
-                "equivalences": [],
-            }
-            if row.get("chebi_id", None):
-                term["equivalences"].append(row["chebi_id"])
-            if row.get("inchi_key", None):
-                term["equivalences"].append(row["inchi_key"])
+            term = Term(
+                key=key,
+                namespace=namespace,
+                id=record["src_id"],
+                alt_keys=record["alt_keys"],
+                label=label,
+                name=name,
+                synonyms=copy.copy(list(set(record["syns"]))),
+                entity_types=["Abundance"],
+            )
+
+            if record.get("chebi_id", None):
+                term.equivalence_keys.append(record["chebi_id"])
+            if record.get("inchi_key", None):
+                term.equivalence_keys.append(record["inchi_key"])
 
             # Add term to JSONL
-            fo.write("{}\n".format(json.dumps({"term": term})))
+            fo.write("{}\n".format(json.dumps({"term": term.dict()})))
 
 
-def main():
+def main(
+    overwrite: bool = Option(
+        False, help="Force overwrite of output resource data file"
+    ),
+    force_download: bool = Option(
+        False, help="Force re-downloading of source data file"
+    ),
+):
 
-    if pref_name_dupes():
-        quit()
+    (changed, msg) = get_ftp_file(
+        download_url, download_fn, force_download=force_download
+    )
 
-    build_json()
+    if msg:
+        log.info("Collect download file", result=msg, changed=changed)
+
+    if changed or overwrite:
+        build_json()
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

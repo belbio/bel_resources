@@ -2,91 +2,48 @@
 # -*- coding: utf-8 -*-
 
 """
-Usage:  rgd.py
+Usage:  hgnc.py
 
 """
-
-import sys
-import re
-import os
-import tempfile
-import json
-import yaml
-import datetime
 import copy
+import datetime
 import gzip
+import json
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+from typing import TextIO
 
-import app.utils as utils
-import app.settings as settings
-
-import app.setup_logging
 import structlog
+import yaml
 
-log = structlog.getLogger(__name__)
+import app.settings as settings
+import app.setup_logging
+import typer
+from app.common.collect_sources import get_ftp_file
+from app.common.resources import get_metadata, get_species_labels
+from app.common.text import quote_id
+from app.schemas.main import Term
+from typer import Option
+
+log = structlog.getLogger("rgd_namespace")
 
 # Globals
-namespace_key = "rgd"
-namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_key]
-ns_prefix = namespace_def["namespace"]
 
-tax_id = "TAX:10116"
+namespace = "RGD"
+namespace_lc = namespace.lower()
+namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_lc]
 
-terms_fp = f"../data/terms/{namespace_key}.jsonl.gz"
-tmpdir = tempfile.TemporaryDirectory(suffix=None, prefix=None, dir=None)
-dt = datetime.datetime.now().replace(microsecond=0).isoformat()
+species_key = "TAX:10116"
 
-server = "ftp.rgd.mcw.edu"
-source_data_fp = "/pub/data_release/GENES_RAT.txt"
-
-# Local data filepath setup
-basename = os.path.basename(source_data_fp)
-
-if not re.search(
-    ".gz$", basename
-):  # we basically gzip everything retrieved that isn't already gzipped
-    basename = f"{basename}.gz"
-
-local_data_fp = f"{settings.DOWNLOAD_DIR}/{namespace_key}_{basename}"
+download_url = "ftp://ftp.rgd.mcw.edu/pub/data_release/GENES_RAT.txt"
+download_fn = f"{settings.DOWNLOAD_DIR}/rgd.txt.gz"
+resource_fn = f"{settings.DATA_DIR}/namespaces/{namespace_lc}.jsonl.gz"
 
 
-def get_metadata():
-    # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yml file
-    dt = datetime.datetime.now().replace(microsecond=0).isoformat()
-    metadata = {
-        "name": namespace_def["namespace"],
-        "type": "namespace",
-        "namespace": namespace_def["namespace"],
-        "description": namespace_def["description"],
-        "version": dt,
-        "src_url": namespace_def["src_url"],
-        "url_template": namespace_def["template_url"],
-    }
-
-    return metadata
-
-
-def update_data_files() -> bool:
-    """ Download data files if needed
-
-    Args:
-        None
-    Returns:
-        bool: files updated = True, False if not
-    """
-
-    result = utils.get_ftp_file(
-        server, source_data_fp, local_data_fp, days_old=settings.UPDATE_CYCLE_DAYS
-    )
-
-    changed = False
-    if "Downloaded" in result[1]:
-        changed = True
-
-    return changed
-
-
-def build_json(force: bool = False):
+def build_json():
     """Build RGD namespace json load file
 
     Args:
@@ -96,35 +53,41 @@ def build_json(force: bool = False):
         None
     """
 
-    # Terminology JSONL output filename
-    data_fp = settings.DATA_DIR
-    terms_fp = f"{data_fp}/namespaces/{namespace_key}.jsonl.gz"
-
-    # Don't rebuild file if it's newer than downloaded source file
-    if not force:
-        if utils.file_newer(terms_fp, local_data_fp):
-            log.info("Will not rebuild data file as it is newer than downloaded source file")
-            return False
-
-    species_labels_fn = f"{data_fp}/namespaces/tax_labels.json.gz"
-    with gzip.open(species_labels_fn, "r") as fi:
-        species_label = json.load(fi)
+    species_labels = get_species_labels()
 
     # Map gene_types to BEL entity types
     bel_entity_type_map = {
         "pseudo": ["Gene", "RNA"],
+        "pseudogene": ["Gene", "RNA"],
+        "transcribed_processed_pseudogene": ["Gene", "RNA"],
+        "transcribed_unprocessed_pseudogene": ["Gene", "RNA"],
         "protein-coding": ["Gene", "RNA", "Protein"],
+        "ribozyme": ["Gene", "RNA", "Protein"],
         "ncrna": ["Gene", "RNA"],
         "gene": ["Gene", "RNA", "Protein"],
         "snrna": ["Gene", "RNA"],
         "trna": ["Gene", "RNA"],
+        "mt_trna": ["Gene", "RNA"],
         "rrna": ["Gene", "RNA"],
+        "mt_rrna": ["Gene", "RNA"],
+        "processed_transcript": ["Gene", "RNA"],
+        "misc_rna": ["Gene", "RNA"],
+        "mirna": ["Gene", "RNA"],
+        "lincrna": ["Gene", "RNA"],
+        "processed_transcript": [],
+        "processed_pseudogene": [],
+        "unprocessed_pseudogene": [],
+        "antisense": [],
+        "sense_intronic": [],
+        "snorna": [],
+        "scarna": [],
+        "tec": [],
     }
 
-    with gzip.open(local_data_fp, "rt") as fi, gzip.open(terms_fp, "wt") as fo:
+    with gzip.open(download_fn, "rt") as fi, gzip.open(resource_fn, "wt") as fo:
 
         # Header JSONL record for terminology
-        metadata = get_metadata()
+        metadata = get_metadata(namespace_def)
         fo.write("{}\n".format(json.dumps({"metadata": metadata})))
 
         for line in fi:
@@ -170,35 +133,42 @@ def build_json(force: bool = False):
             entity_types = []
             if gene_type not in bel_entity_type_map:
                 log.error(f"New RGD gene_type not found in bel_entity_type_map {gene_type}")
+                continue
             else:
                 entity_types = bel_entity_type_map[gene_type]
 
-            term = {
-                "namespace": ns_prefix,
-                "namespace_value": symbol,
-                "src_id": rgd_id,
-                "id": utils.get_prefixed_id(ns_prefix, symbol),
-                "alt_ids": [utils.get_prefixed_id(ns_prefix, rgd_id)],
-                "label": symbol,
-                "name": name,
-                "description": desc,
-                "species_id": tax_id,
-                "species_label": species_label[tax_id],
-                "entity_types": copy.copy(entity_types),
-                "equivalences": copy.copy(equivalences),
-                "synonyms": copy.copy(synonyms),
-            }
+            term = Term(
+                key=f"{namespace}:{rgd_id}",
+                namespace=namespace,
+                id=rgd_id,
+                label=symbol,
+                name=name,
+                description=desc,
+                species_key=species_key,
+                species_label=species_labels[species_key],
+                entity_types=copy.copy(entity_types),
+                equivalence_keys=copy.copy(equivalences),
+                synonyms=copy.copy(synonyms),
+                alt_keys=[f"{namespace}:{symbol}"],
+            )
 
             # Add term to JSONL
-            fo.write("{}\n".format(json.dumps({"term": term})))
+            fo.write("{}\n".format(json.dumps({"term": term.dict()})))
 
 
-def main():
+def main(
+    overwrite: bool = Option(False, help="Force overwrite of output resource data file"),
+    force_download: bool = Option(False, help="Force re-downloading of source data file"),
+):
 
-    update_data_files()
-    build_json()
+    (changed, msg) = get_ftp_file(download_url, download_fn, force_download=force_download)
+
+    if msg:
+        log.info("Collect download file", result=msg, changed=changed)
+
+    if changed or overwrite:
+        build_json()
 
 
 if __name__ == "__main__":
-    main()
-
+    typer.run(main)

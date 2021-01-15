@@ -2,107 +2,64 @@
 # -*- coding: utf-8 -*-
 
 """
-Usage:  zfin.py
+Usage:  hgnc.py
 
 """
-
-import re
-import os
-import json
-import yaml
-import datetime
 import copy
+import datetime
 import gzip
+import json
+import os
+import re
+import sys
+import tempfile
+from pathlib import Path
+from typing import TextIO
 
-import app.utils as utils
-import app.settings as settings
-
-import app.setup_logging
 import structlog
+import yaml
 
-log = structlog.getLogger(__name__)
+import app.settings as settings
+import app.setup_logging
+import typer
+from app.common.collect_sources import get_web_file
+from app.common.resources import get_metadata, get_species_labels
+from app.common.text import quote_id
+from app.schemas.main import Term
+from typer import Option
 
-# Globals ###################################################################
-namespace_key = "zfin"  # namespace key into namespace definitions file
-namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_key]
-ns_prefix = namespace_def["namespace"]
+log = structlog.getLogger("zfin_namespace")
 
+# Globals
 
-def get_metadata():
-    # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yml file
-    dt = datetime.datetime.now().replace(microsecond=0).isoformat()
-    metadata = {
-        "name": namespace_def["namespace"],
-        "type": "namespace",
-        "namespace": namespace_def["namespace"],
-        "description": namespace_def["description"],
-        "version": dt,
-        "src_url": namespace_def["src_url"],
-        "url_template": namespace_def["template_url"],
-    }
+namespace = "ZFIN"
+namespace_lc = namespace.lower()
+namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_lc]
 
-    return metadata
+species_key = "TAX:7955"
 
+download_url = "https://zfin.org/downloads/aliases.txt"
+download_url2 = "https://zfin.org/downloads/gene.txt"
+download_url3 = "https://zfin.org/downloads/transcripts.txt"
 
-def update_data_files() -> bool:
-    """ Download data files if needed
+download_fn = f"{settings.DOWNLOAD_DIR}/zfin_aliases.txt.gz"
+download_fn2 = f"{settings.DOWNLOAD_DIR}/zfin_gene.txt.gz"
+download_fn3 = f"{settings.DOWNLOAD_DIR}/zfin_transcripts.txt.gz"
 
-    Args:
-        None
-    Returns:
-        bool: files updated = True, False if not
-    """
+aliases_fn = download_fn
+genes_fn = download_fn2
+transcripts_fn = download_fn3
 
-    # Can override/hard-code settings.UPDATE_CYCLE_DAYS in each term collection file if desired
-
-    files = [
-        "https://zfin.org/downloads/aliases.txt",
-        "https://zfin.org/downloads/gene.txt",
-        "https://zfin.org/downloads/transcripts.txt",
-    ]
-
-    for url in files:
-        # Local data filepath setup
-        basename = os.path.basename(url)
-
-        if not re.search(
-            ".gz$", basename
-        ):  # we basically gzip everything retrieved that isn't already gzipped
-            basename = f"{basename}.gz"
-
-        # Pick one of the two following options
-        local_data_fp = f"{settings.DOWNLOAD_DIR}/{namespace_key}_{basename}"
-
-        # Get web file - but not if local downloaded file is newer
-        (changed_flag, msg) = utils.get_web_file(
-            url, local_data_fp, days_old=settings.UPDATE_CYCLE_DAYS
-        )
-        log.info(msg)
+resource_fn = f"{settings.DATA_DIR}/namespaces/{namespace_lc}.jsonl.gz"
 
 
-def build_json(force: bool = False):
+def build_json():
     """Build term JSONL file"""
 
-    # Terminology JSONL output filename
-    data_fp = settings.DATA_DIR
-    terms_fp = f"{data_fp}/namespaces/{namespace_key}.jsonl.gz"
-
-    aliases_fp = f"{settings.DOWNLOAD_DIR}/{namespace_key}_aliases.txt.gz"
-    genes_fp = f"{settings.DOWNLOAD_DIR}/{namespace_key}_gene.txt.gz"
-    transcripts_fp = f"{settings.DOWNLOAD_DIR}/{namespace_key}_transcripts.txt.gz"
-
-    # used if you need a tmp dir to do some processing
-    # tmpdir = tempfile.TemporaryDirectory()
-
-    # Don't rebuild file if it's newer than downloaded source file
-    if not force:
-        if utils.file_newer(terms_fp, aliases_fp) and utils.file_newer(terms_fp, genes_fp):
-            log.info("Will not rebuild data file as it is newer than downloaded source files")
-            return False
+    species_labels = get_species_labels()
 
     terms = {}
-    with gzip.open(aliases_fp, "rt") as fi:
+    with gzip.open(aliases_fn, "rt") as fi:
         for line in fi:
             if re.match("ZDB-GENE-", line):
                 (src_id, name, symbol, syn, *extra) = line.split("\t")
@@ -112,7 +69,7 @@ def build_json(force: bool = False):
                 else:
                     terms[src_id] = {"name": name, "symbol": symbol, "synonyms": [syn]}
 
-    with gzip.open(transcripts_fp, "rt") as fi:
+    with gzip.open(transcripts_fn, "rt") as fi:
         transcript_types = {}
         for line in fi:
             (tscript_id, so_id, name, gene_id, clone_id, tscript_type, status, *extra) = line.split(
@@ -130,24 +87,32 @@ def build_json(force: bool = False):
 
             entity_types = []
             for type_ in types:
-                if type_ in ["lincRNA", "ncRNA", "scRNA", "snRNA", "snoRNA"]:
+                if type_ in [
+                    "lincRNA",
+                    "ncRNA",
+                    "scRNA",
+                    "snRNA",
+                    "snoRNA",
+                    "antisense",
+                    "aberrant processed transcript",
+                    "pseudogenic transcript",
+                ]:
                     entity_types.extend(["Gene", "RNA"])
-                if type_ in ["mRNA"]:
+                elif type_ in ["mRNA", "V-gene"]:
                     entity_types.extend(["Gene", "RNA", "Protein"])
-                if type_ in ["miRNA"]:
+                elif type_ in ["miRNA"]:
                     entity_types.extend(["Gene", "Micro_RNA"])
+                else:
+                    print(f"Unknown gene type: {type_}")
 
             entity_types = list(set(entity_types))
-
-            if gene_id == "ZDB-GENE-030115-1":
-                print("Entity types", entity_types, "Types", types)
 
             if gene_id in terms:
                 terms[gene_id]["entity_types"] = list(entity_types)
             else:
                 terms[gene_id] = {"name": name, "entity_types": list(entity_types)}
 
-    with gzip.open(genes_fp, "rt") as fi:
+    with gzip.open(genes_fn, "rt") as fi:
         for line in fi:
             (src_id, so_id, symbol, eg_id, *extra) = line.split("\t")
             if src_id in terms:
@@ -158,40 +123,52 @@ def build_json(force: bool = False):
                 log.debug(f"No term record for ZFIN {src_id} to add equivalences to")
                 continue
 
-    with gzip.open(terms_fp, "wt") as fo:
+    with gzip.open(resource_fn, "wt") as fo:
 
         # Header JSONL record for terminology
-        metadata = get_metadata()
+        metadata = get_metadata(namespace_def)
         fo.write("{}\n".format(json.dumps({"metadata": metadata})))
 
-        for term in terms:
+        for term_id in terms:
 
-            main_id = terms[term].get("symbol", terms[term].get("name", term))
+            label = terms[term_id].get("symbol", terms[term_id].get("name", term_id))
+            name = terms[term_id].get("name", term_id)
 
-            term = {
-                "namespace": ns_prefix,
-                "namespace_value": main_id,
-                "src_id": term,
-                "id": f"{ns_prefix}:{main_id}",
-                "alt_ids": [],
-                "label": main_id,
-                "name": terms[term].get("name", term),
-                "species_id": "TAX:7955",
-                "species_label": "zebrafish",
-                "synonyms": copy.copy(list(set(terms[term].get("synonyms", [])))),
-                "entity_types": copy.copy(terms[term].get("entity_types", [])),
-                "equivalences": copy.copy(terms[term].get("equivalences", [])),
-            }
+            term = Term(
+                key=f"{namespace}:{term_id}",
+                namespace=namespace,
+                id=term_id,
+                label=label,
+                name=name,
+                species_key=species_key,
+                species_label=species_labels[species_key],
+                synonyms=list(set(terms[term_id].get("synonyms", []))),
+                entity_types=terms[term_id].get("entity_types", []),
+                equivalence_keys=terms[term_id].get("equivalences", []),
+            )
+
+            if term.id != term.label:
+                term.alt_keys = [f"{namespace}:{term.label}"]
 
             # Add term to JSONLines file
-            fo.write("{}\n".format(json.dumps({"term": term})))
+            fo.write("{}\n".format(json.dumps({"term": term.dict()})))
 
 
-def main():
+def main(
+    overwrite: bool = Option(False, help="Force overwrite of output resource data file"),
+    force_download: bool = Option(False, help="Force re-downloading of source data file"),
+):
 
-    update_data_files()
-    build_json()
+    (changed, msg) = get_web_file(download_url, download_fn, force_download=force_download)
+    (changed2, msg2) = get_web_file(download_url2, download_fn2, force_download=force_download)
+    (changed3, msg3) = get_web_file(download_url3, download_fn3, force_download=force_download)
+
+    if msg:
+        log.info("Collect download file", result=msg, changed=changed)
+
+    if changed or overwrite:
+        build_json()
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

@@ -5,7 +5,6 @@
 Usage:  hgnc.py
 
 """
-
 import copy
 import datetime
 import gzip
@@ -14,75 +13,37 @@ import os
 import re
 import sys
 import tempfile
+from pathlib import Path
+from typing import TextIO
 
+import structlog
 import yaml
 
 import app.settings as settings
 import app.setup_logging
-import app.utils as utils
-import structlog
+import typer
+from app.common.collect_sources import get_ftp_file
+from app.common.resources import get_metadata, get_species_labels
+from app.common.text import quote_id
+from app.schemas.main import Term
+from typer import Option
 
-log = structlog.getLogger(__name__)
+log = structlog.getLogger("hgnc_namespace")
 
 # Globals
-namespace_key = "hgnc"
-namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_key]
-ns_prefix = namespace_def["namespace"]
 
-tax_id = "TAX:9606"
+namespace = "HGNC"
+namespace_lc = namespace.lower()
+namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_lc]
 
-server = "ftp.ebi.ac.uk"
-source_data_fp = "/pub/databases/genenames/new/json/hgnc_complete_set.json"
+species_key = "TAX:9606"
 
-# Local data filepath setup
-basename = os.path.basename(source_data_fp)
-
-if not re.search(
-    ".gz$", basename
-):  # we basically gzip everything retrieved that isn't already gzipped
-    basename = f"{basename}.gz"
-
-local_data_fp = f"{settings.DOWNLOAD_DIR}/{basename}"
+download_url = "ftp://ftp.ebi.ac.uk/pub/databases/genenames/new/json/hgnc_complete_set.json"
+download_fn = f"{settings.DOWNLOAD_DIR}/hgnc.json.gz"
+resource_fn = f"{settings.DATA_DIR}/namespaces/{namespace_lc}.jsonl.gz"
 
 
-def get_metadata():
-    # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yml file
-    dt = datetime.datetime.now().replace(microsecond=0).isoformat()
-    metadata = {
-        "name": namespace_def["namespace"],
-        "type": "namespace",
-        "namespace": namespace_def["namespace"],
-        "description": namespace_def["description"],
-        "version": dt,
-        "src_url": namespace_def["src_url"],
-        "url_template": namespace_def["template_url"],
-    }
-
-    return metadata
-
-
-def update_data_files() -> bool:
-    """ Download data files if needed
-
-    Args:
-        None
-    Returns:
-        bool: files updated = True, False if not
-    """
-
-    result = utils.get_ftp_file(
-        server, source_data_fp, local_data_fp, days_old=settings.UPDATE_CYCLE_DAYS
-    )
-
-    changed = False
-    if "Downloaded" in result[1]:
-        changed = True
-
-    return changed
-
-
-def build_json(force: bool = False):
+def build_json():
     """Build term json load file
 
     Args:
@@ -92,19 +53,7 @@ def build_json(force: bool = False):
         None
     """
 
-    # Terminology JSONL output filename
-    data_fp = settings.DATA_DIR
-    terms_fp = f"{data_fp}/namespaces/{namespace_key}.jsonl.gz"
-
-    # Don't rebuild file if it's newer than downloaded source file
-    if not force:
-        if utils.file_newer(terms_fp, local_data_fp):
-            log.info("Will not rebuild data file as it is newer than downloaded source file")
-            return False
-
-    species_labels_fn = f"{data_fp}/namespaces/tax_labels.json.gz"
-    with gzip.open(species_labels_fn, "r") as fi:
-        species_label = json.load(fi)
+    species_labels = get_species_labels()
 
     # Map gene_types to BEL entity types
     bel_entity_type_map = {
@@ -142,10 +91,10 @@ def build_json(force: bool = False):
         "RNA, vault": ["Gene", "RNA"],
     }
 
-    with gzip.open(local_data_fp, "rt") as fi, gzip.open(terms_fp, "wt") as fo:
+    with gzip.open(download_fn, "rt") as fi, gzip.open(resource_fn, "wt") as fo:
 
         # Header JSONL record for terminology
-        metadata = get_metadata()
+        metadata = get_metadata(namespace_def)
         fo.write("{}\n".format(json.dumps({"metadata": metadata})))
 
         orig_data = json.load(fi)
@@ -157,40 +106,44 @@ def build_json(force: bool = False):
                 continue
 
             hgnc_id = doc["hgnc_id"].replace("HGNC:", "")
-            term = {
-                "namespace": ns_prefix,
-                "namespace_value": doc["symbol"],
-                "src_id": hgnc_id,
-                "id": utils.get_prefixed_id(ns_prefix, doc["symbol"]),
-                "alt_ids": [utils.get_prefixed_id(ns_prefix, hgnc_id)],
-                "label": doc["symbol"],
-                "name": doc["name"],
-                "species_id": tax_id,
-                "species_label": species_label[tax_id],
-                "description": "",
-                "entity_types": [],
-                "equivalences": [],
-                "synonyms": [],
-                "children": [],
-                "obsolete_ids": [],
-            }
+
+            term = Term(
+                key=f"{namespace}:{hgnc_id}",
+                namespace=namespace,
+                id=hgnc_id,
+                label=doc["symbol"],
+                name=doc["name"],
+                alt_keys=[f"{namespace}:{doc['symbol']}"],
+                species_key=species_key,
+                species_label=species_labels[species_key],
+            )
 
             # Synonyms
-            term["synonyms"].extend(doc.get("synonyms", []))
-            term["synonyms"].extend(doc.get("alias_symbol", []))
-            term["synonyms"].extend(doc.get("alias_name", []))
-            term["synonyms"].extend(doc.get("prev_name", []))
+            term.synonyms.extend(doc.get("synonyms", []))
+            term.synonyms.extend(doc.get("alias_symbol", []))
+            term.synonyms.extend(doc.get("alias_name", []))
+            term.synonyms.extend(doc.get("prev_name", []))
 
             # Equivalences
             for _id in doc.get("uniprot_ids", []):
-                term["equivalences"].append(f"SP:{_id}")
+                term.equivalence_keys.append(f"SP:{_id}")
+                term.equivalence_keys.append(f"uniprot:{_id}")
 
             if "entrez_id" in doc:
-                term["equivalences"].append(f"EG:{doc['entrez_id']}")
+                term.equivalence_keys.append(f"EG:{doc['entrez_id']}")
+
+            for _id in doc.get("refseq_accession", []):
+                term.equivalence_keys.append(f"refseq:{_id}")
+
+            if "ensembl_gene_id" in doc:
+                term.equivalence_keys.append(f"ensembl:{doc['ensembl_gene_id']}")
+
+            if "orphanet" in doc:
+                term.equivalence_keys.append(f"orphanet:{doc['orphanet']}")
 
             # Entity types
             if doc["locus_type"] in bel_entity_type_map:
-                term["entity_types"] = bel_entity_type_map[doc["locus_type"]]
+                term.entity_types = bel_entity_type_map[doc["locus_type"]]
             else:
                 log.error(
                     f'New HGNC locus_type not found in bel_entity_type_map {doc["locus_type"]}'
@@ -199,17 +152,25 @@ def build_json(force: bool = False):
             # Obsolete Namespace IDs
             if "prev_symbol" in doc:
                 for obs_id in doc["prev_symbol"]:
-                    term["obsolete_ids"].append(utils.get_prefixed_id(ns_prefix, obs_id))
+                    term.obsolete_keys.append(f"{namespace}:{quote_id(obs_id)}")
 
             # Add term to JSONL
-            fo.write("{}\n".format(json.dumps({"term": term})))
+            fo.write("{}\n".format(json.dumps({"term": term.dict()})))
 
 
-def main():
+def main(
+    overwrite: bool = Option(False, help="Force overwrite of output resource data file"),
+    force_download: bool = Option(False, help="Force re-downloading of source data file"),
+):
 
-    update_data_files()
-    build_json()
+    (changed, msg) = get_ftp_file(download_url, download_fn, force_download=force_download)
+
+    if msg:
+        log.info("Collect download file", result=msg, changed=changed)
+
+    if changed or overwrite:
+        build_json()
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)

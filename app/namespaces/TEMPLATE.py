@@ -2,10 +2,9 @@
 # -*- coding: utf-8 -*-
 
 """
-Usage:  TEMPLATE.py
+Usage:  hgnc.py
 
 """
-
 import copy
 import datetime
 import gzip
@@ -14,135 +13,101 @@ import os
 import re
 import sys
 import tempfile
-from typing import Any, Iterable, List, Mapping
+from pathlib import Path
+from typing import TextIO
 
+import structlog
 import yaml
 
 import app.settings as settings
 import app.setup_logging
-import app.utils as utils
-import structlog
+import typer
+from app.common.collect_sources import get_ftp_file
+from app.common.resources import get_metadata, get_species_labels
+from app.common.text import quote_id
+from app.schemas.main import Term
+from typer import Option
 
-log = structlog.getLogger(__name__)
+log = structlog.getLogger("CHANGEME_namespace")
 
-"""
-1.  Set up globals - what files to download, any adjustments to metadata, filenames, etc
-    update 'REPLACEME' text
-2.  Download source data files [update_data_files()]
-3.  Dataset preprocessing - e.g. double check term names for duplicates if you
-    plan on using them for IDs, pre-collect information needed to build the term record
-4.  Process terms and write them to terms_fp file
-    filter out species not in settings.SPECIES_LIST unless empty list
-"""
+# Globals
 
-# Globals ###################################################################
-namespace_key = "REPLACEME"  # namespace key into namespace definitions file
-namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_key]
-ns_prefix = namespace_def[namespace_key]["namespace"]
+namespace = "CHANGEME"
+namespace_lc = namespace.lower()
+namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_lc]
 
-# FTP options
-server = "REPLACEME"
-source_data_fp = "REPLACEME"  # may have multiple files to be downloaded
-# Web file options
-url = "REPLACEME"  # may have multiple files to be downloaded
+species_key = "TAX:CHANGEME"
 
-# Local data filepath setup
-basename = os.path.basename(source_data_fp)
-
-if not re.search(
-    ".gz$", basename
-):  # we basically gzip everything retrieved that isn't already gzipped
-    basename = f"{basename}.gz"
-
-# Pick one of the two following options
-local_data_fp = f"{settings.DOWNLOAD_DIR}/{namespace_key}_{basename}"
-# local_data_fp = f'{settings.DOWNLOAD_DIR}/{basename}'  # if namespace_key already is prefixed to basename
+download_url = "ftp://CHANGEME"
+download_fn = f"{settings.DOWNLOAD_DIR}/CHANGEME.gz"
+resource_fn = f"{settings.DATA_DIR}/namespaces/{namespace_lc}.jsonl.gz"
 
 
-def get_metadata():
-    # Setup metadata info - mostly captured from namespace definition file which
-    # can be overridden in belbio_conf.yml file
-    dt = datetime.datetime.now().replace(microsecond=0).isoformat()
-    metadata = {
-        "name": namespace_def["namespace"],
-        "namespace": namespace_def["namespace"],
-        "description": namespace_def["description"],
-        "version": dt,
-        "src_url": namespace_def["src_url"],
-        "url_template": namespace_def["template_url"],
-    }
-
-    return metadata
-
-
-def update_data_files() -> bool:
-    """ Download data files if needed
+def build_json():
+    """Build term json load file
 
     Args:
-        None
+        force (bool): build json result regardless of file mod dates
+
     Returns:
-        bool: files updated = True, False if not
+        None
     """
 
-    # Can override/hard-code settings.UPDATE_CYCLE_DAYS in each term collection file if desired
+    species_labels = get_species_labels()
 
-    # This is all customizable - but here are some of the most common options
-
-    # Get ftp file - but not if local downloaded file is newer
-    # result = utils.get_ftp_file(server, source_data_fp, local_data_fp, days_old=settings.UPDATE_CYCLE_DAYS)
-
-    # Get web file - but not if local downloaded file is newer
-    # (changed_flag, msg) = utils.get_web_file(url, local_data_fp, days_old=settings.UPDATE_CYCLE_DAYS)
-    # log.info(msg)
-
-
-def build_json(force: bool = False):
-    """Build term JSONL file"""
-
-    # Terminology JSONL output filename
-    data_fp = settings.DATA_DIR
-    terms_fp = f"{data_fp}/namespaces/{namespace_key}.jsonl.gz"
-
-    # used if you need a tmp dir to do some processing
-    # tmpdir = tempfile.TemporaryDirectory()
-
-    # Don't rebuild file if it's newer than downloaded source file
-    if not force:
-        if utils.file_newer(terms_fp, local_data_fp):
-            log.info("Will not rebuild data file as it is newer than downloaded source files")
-            return False
-
-    with gzip.open(local_data_fp, "rt") as fi, gzip.open(terms_fp, "wt") as fo:
+    with gzip.open(download_fn, "rt") as fi, gzip.open(resource_fn, "wt") as fo:
 
         # Header JSONL record for terminology
-        metadata = get_metadata()
+        metadata = get_metadata(namespace_def)
         fo.write("{}\n".format(json.dumps({"metadata": metadata})))
 
-        for row in fi:
+        orig_data = json.load(fi)
 
-            # review https://github.com/belbio/schemas/blob/master/schemas/terminology-0.1.0.yaml
-            # for what should go in here
-            term = {
-                "namespace": ns_prefix,
-                "src_id": "",
-                "id": "",
-                "alt_ids": [],
-                "label": "",
-                "name": "",
-                "synonyms": copy.copy(list(set([]))),
-                "entity_types": [],
-                "equivalences": [],
-            }
+        for doc in orig_data:
 
-            # Add term to JSONLines file
-            fo.write("{}\n".format(json.dumps({"term": term})))
+            id = doc["CHANGEME"]
+
+            term = Term(
+                key=f"{namespace}:{id}",
+                namespace=namespace,
+                id=id,
+                # label=doc["symbol"],
+                # name=doc["name"],
+                # species_key=species_key,
+                # species_label=species_labels[species_key],
+            )
+
+            term.alt_ids = ["NS:1"]
+
+            # Synonyms
+            term.synonyms.extend(["one", "two"])
+
+            # Equivalences
+            term.equivalence_keys.append("NS:1")
+
+            # Entity types
+            term.entity_types = []
+
+            # Obsolete Namespace IDs
+            term.obsolete_keys.append("NS:1")
+
+            # Add term to JSONL
+            fo.write("{}\n".format(json.dumps({"term": term.dict()})))
 
 
-def main():
+def main(
+    overwrite: bool = Option(False, help="Force overwrite of output resource data file"),
+    force_download: bool = Option(False, help="Force re-downloading of source data file"),
+):
 
-    update_data_files()
-    build_json()
+    (changed, msg) = get_ftp_file(download_url, download_fn, force_download=force_download)
+
+    if msg:
+        log.info("Collect download file", result=msg, changed=changed)
+
+    if changed or overwrite:
+        build_json()
 
 
 if __name__ == "__main__":
-    main()
+    typer.run(main)
