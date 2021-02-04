@@ -36,7 +36,7 @@ namespace_def = settings.NAMESPACE_DEFINITIONS[namespace_lc]
 download_url = "ftp://ftp.ncbi.nlm.nih.gov/gene/DATA/GENE_INFO/All_Data.gene_info.gz"
 download_history_url = "ftp://ftp.ncbi.nlm.nih.gov/gene/DATA/gene_history.gz"
 download_fn = f"{settings.DOWNLOAD_DIR}/eg.csv.gz"
-download_history_fn = f"{settings.DOWNLOAD_DIR}/eg_gene_history.json.gz"
+download_history_fn = f"{settings.DOWNLOAD_DIR}/eg_gene_history.gz"
 resource_fn = f"{settings.DATA_DIR}/namespaces/{namespace_lc}.jsonl.gz"
 resource_fn_hmrz = f"{settings.DATA_DIR}/namespaces/{namespace_lc}_hmrz.jsonl.gz"
 hmrz_species = ["TAX:9606", "TAX:10090", "TAX:10116", "TAX:7955"]
@@ -140,15 +140,16 @@ def build_json():
             if dbxrefs is not None:
                 for dbxref in dbxrefs:
                     if "Ensembl:" in dbxref:
+                        dbxref = dbxref.replace("Ensembl", "ensembl")
                         equivalence_keys.append(dbxref)
                     elif "MGI:MGI" in dbxref:
-                        dbxref.replace("MGI:MGI:", "MGI:")
+                        dbxref = dbxref.replace("MGI:MGI:", "MGI:")
                         equivalence_keys.append(dbxref)
                     elif "VGNC:VGNC:" in dbxref:
-                        dbxref.replace("VGNC:VGNC:", "VGNC:")
+                        dbxref = dbxref.replace("VGNC:VGNC:", "VGNC:")
                         equivalence_keys.append(dbxref)
                     elif "HGNC:HGNC:" in dbxref:
-                        dbxref.replace("HGNC:HGNC:", "HGNC:")
+                        dbxref = dbxref.replace("HGNC:HGNC:", "HGNC:")
                         equivalence_keys.append(dbxref)
                     else:
                         (prefix, rest) = dbxref.split(":")
